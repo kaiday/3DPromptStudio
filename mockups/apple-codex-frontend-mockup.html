@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>3DPromptStudio Apple/Codex Mockup</title>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --surface: rgba(255, 255, 255, 0.74);
+      --surface-strong: rgba(255, 255, 255, 0.92);
+      --canvas: #fbfbfd;
+      --line: #e2e3e7;
+      --line-soft: #ececf0;
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --faint: #a1a1a6;
+      --blue: #007aff;
+      --blue-soft: #eaf4ff;
+      --green: #34c759;
+      --amber: #c68a2d;
+      --red: #ff3b30;
+      --shadow: 0 18px 55px rgba(0, 0, 0, 0.08);
+      --radius: 16px;
+    }
+
+    body.dark {
+      --bg: #111214;
+      --surface: rgba(31, 31, 34, 0.72);
+      --surface-strong: rgba(43, 43, 46, 0.92);
+      --canvas: #16171a;
+      --line: #34363b;
+      --line-soft: #27292e;
+      --text: #f5f5f7;
+      --muted: #a1a1a6;
+      --faint: #6e6e73;
+      --blue: #0a84ff;
+      --blue-soft: rgba(10, 132, 255, 0.16);
+      --shadow: 0 18px 55px rgba(0, 0, 0, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #ececef;
+      color: var(--text);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      transition: background 180ms ease;
+    }
+
+    body.dark {
+      background: #050506;
+    }
+
+    .app {
+      width: min(1440px, calc(100vw - 32px));
+      height: min(920px, calc(100vh - 32px));
+      min-height: 760px;
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(60, 60, 67, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60, 60, 67, 0.035) 1px, transparent 1px),
+        var(--bg);
+      background-size: 42px 42px, 42px 42px, auto;
+      border: 1px solid #d7d8dd;
+      border-radius: 22px;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.14);
+    }
+
+    body.dark .app {
+      border-color: #2d2e33;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+    }
+
+    .topbar {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      top: 18px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      backdrop-filter: blur(22px);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+    }
+
+    .brand, .actions, .chip {
+      display: flex;
+      align-items: center;
+    }
+
+    .brand { gap: 10px; font-size: 14px; font-weight: 650; }
+    .subtle { color: var(--faint); font-weight: 450; margin-left: 2px; }
+    .actions { gap: 8px; }
+
+    .iconbox {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      color: var(--blue);
+      background: #f2f2f4;
+      border: 1px solid #d8d9de;
+      font-size: 13px;
+    }
+
+    .chip {
+      height: 28px;
+      gap: 7px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #f8f8fa;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .chip.primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+      font-weight: 650;
+    }
+
+    .theme-toggle {
+      cursor: pointer;
+      color: #1d1d1f;
+      background: #ffffff;
+    }
+
+    body.dark .theme-toggle {
+      color: #f5f5f7;
+      background: #2b2b2e;
+    }
+
+    body.dark .chip,
+    body.dark .small-button,
+    body.dark .search,
+    body.dark .tabs,
+    body.dark .field,
+    body.dark .prompt-card,
+    body.dark .iconbox,
+    body.dark .toolbar {
+      background: rgba(44, 44, 46, 0.74);
+      border-color: #34363b;
+      color: var(--muted);
+    }
+
+    body.dark .tab.active,
+    body.dark .topbar,
+    body.dark .panel {
+      background: var(--surface);
+      border-color: var(--line);
+    }
+
+    body.dark .viewport {
+      background: var(--canvas);
+      border-color: var(--line);
+    }
+
+    body.dark .grid {
+      opacity: 0.38;
+      background:
+        linear-gradient(var(--line-soft) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    body.dark .model-stage {
+      background:
+        radial-gradient(circle at 50% 46%, rgba(72, 75, 82, 0.58), rgba(42, 44, 49, 0.28) 58%, transparent 72%);
+    }
+
+    body.dark .row {
+      color: #d1d1d6;
+    }
+
+    body.dark .row.selected {
+      color: var(--text);
+      background: var(--blue-soft);
+      outline-color: rgba(10, 132, 255, 0.34);
+    }
+
+    body.dark .part-icon {
+      background: #2c2c2e;
+      border-color: #3a3a3c;
+    }
+
+    body.dark .selected .part-icon {
+      background: rgba(10, 132, 255, 0.18);
+      border-color: rgba(10, 132, 255, 0.34);
+    }
+
+    body.dark .field,
+    body.dark .prompt-card p,
+    body.dark .history-row {
+      color: #d1d1d6;
+    }
+
+    body.dark .name,
+    body.dark .tab.active,
+    body.dark .brand,
+    body.dark .panel-title {
+      color: var(--text);
+    }
+
+    body.dark .toolbar {
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--green);
+    }
+
+    .workspace {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      top: 82px;
+      bottom: 18px;
+      display: grid;
+      grid-template-columns: 270px minmax(520px, 1fr) 316px;
+      gap: 12px;
+    }
+
+    .panel, .viewport {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      backdrop-filter: blur(24px);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+      overflow: hidden;
+    }
+
+    .panel { background: var(--surface); }
+    .viewport { background: var(--canvas); position: relative; }
+
+    .panel-header {
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 650;
+      color: var(--muted);
+    }
+
+    .small-button {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: #f5f5f7;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .search {
+      height: 34px;
+      margin: 14px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      border-radius: 10px;
+      background: #f5f5f7;
+      border: 1px solid var(--line);
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    .tree { padding: 2px 12px; }
+
+    .row {
+      height: 32px;
+      display: grid;
+      grid-template-columns: 18px 1fr 22px;
+      align-items: center;
+      gap: 8px;
+      padding: 0 8px;
+      margin-bottom: 6px;
+      border-radius: 9px;
+      color: #515154;
+      font-size: 12px;
+    }
+
+    .row.child { margin-left: 18px; grid-template-columns: 18px 1fr 22px; }
+    .row.selected {
+      color: var(--text);
+      background: var(--blue-soft);
+      outline: 1px solid #b8daff;
+      font-weight: 550;
+    }
+
+    .part-icon {
+      width: 13px;
+      height: 13px;
+      border-radius: 4px;
+      background: #f2f2f4;
+      border: 1px solid #d8d9de;
+    }
+
+    .selected .part-icon {
+      background: #d6ebff;
+      border-color: #b8daff;
+    }
+
+    .eye {
+      width: 16px;
+      height: 9px;
+      border: 1px solid #b9bbc1;
+      border-radius: 999px;
+    }
+
+    .viewport-header {
+      position: absolute;
+      top: 18px;
+      left: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      z-index: 3;
+    }
+
+    .mode { color: var(--faint); }
+
+    .grid {
+      position: absolute;
+      inset: 50px 0 0 0;
+      background:
+        linear-gradient(var(--line-soft) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: 0.7;
+    }
+
+    .model-stage {
+      position: absolute;
+      left: 50%;
+      top: 47%;
+      width: 430px;
+      height: 430px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 46%, rgba(238, 241, 245, 0.98), rgba(238, 241, 245, 0.42) 58%, transparent 72%);
+    }
+
+    .chair {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 260px;
+      height: 360px;
+      transform: translate(-50%, -50%);
+    }
+
+    .back, .seat, .cushion, .leg {
+      position: absolute;
+      border: 1px solid rgba(60, 60, 67, 0.18);
+    }
+
+    .back {
+      left: 55px;
+      top: 18px;
+      width: 150px;
+      height: 184px;
+      border-radius: 22px;
+      background: linear-gradient(145deg, #c99667, #aa744b);
+    }
+
+    .back::after {
+      content: "";
+      position: absolute;
+      left: 36px;
+      top: 26px;
+      width: 76px;
+      height: 132px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.48);
+      background: rgba(142, 91, 52, 0.18);
+    }
+
+    .seat {
+      left: 35px;
+      top: 170px;
+      width: 194px;
+      height: 76px;
+      border-radius: 18px;
+      transform: skewY(-7deg);
+      background: linear-gradient(145deg, #d2a171, #b78355);
+    }
+
+    .cushion {
+      left: 58px;
+      top: 152px;
+      width: 150px;
+      height: 64px;
+      border-radius: 18px;
+      transform: skewY(-7deg);
+      background: #8bbe9a;
+      border: 2px solid var(--blue);
+      box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.08);
+    }
+
+    .leg {
+      top: 226px;
+      width: 18px;
+      height: 128px;
+      border-radius: 8px;
+      background: #2c2c2e;
+    }
+
+    .leg.one { left: 60px; transform: rotate(5deg); }
+    .leg.two { right: 54px; transform: rotate(-4deg); }
+    .leg.three { left: 106px; top: 216px; height: 110px; opacity: 0.84; transform: rotate(-3deg); }
+    .leg.four { right: 100px; top: 216px; height: 110px; opacity: 0.84; transform: rotate(3deg); }
+
+    .annotation {
+      position: absolute;
+      left: 60%;
+      top: 34%;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 550;
+      z-index: 4;
+    }
+
+    .pin {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--blue);
+      box-shadow: 0 0 0 8px rgba(0, 122, 255, 0.08);
+    }
+
+    .guide-line {
+      position: absolute;
+      width: 340px;
+      height: 2px;
+      left: 30%;
+      top: 62%;
+      transform: rotate(-13deg);
+      background: rgba(198, 138, 45, 0.65);
+      z-index: 3;
+    }
+
+    .cut-plane {
+      position: absolute;
+      left: 51%;
+      top: 18%;
+      width: 104px;
+      height: 360px;
+      border: 1px dashed rgba(255, 59, 48, 0.38);
+      border-radius: 4px;
+      transform: rotate(10deg);
+      background: rgba(255, 59, 48, 0.045);
+      z-index: 2;
+    }
+
+    .ground {
+      position: absolute;
+      left: 31%;
+      right: 31%;
+      bottom: 30%;
+      height: 1px;
+      background: #c7c7cc;
+    }
+
+    .toolbar {
+      position: absolute;
+      left: 50%;
+      bottom: 26px;
+      transform: translateX(-50%);
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 7px 10px;
+      border-radius: 18px;
+      border: 1px solid #dadce0;
+      background: rgba(255, 255, 255, 0.86);
+      backdrop-filter: blur(24px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.10);
+      z-index: 5;
+    }
+
+    .tool {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      color: #515154;
+      font-size: 16px;
+    }
+
+    .tool.active {
+      background: var(--blue-soft);
+      color: var(--blue);
+      outline: 1px solid #b8daff;
+    }
+
+    .tabs {
+      height: 36px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin: 14px;
+      padding: 4px;
+      border-radius: 11px;
+      border: 1px solid var(--line);
+      background: #f5f5f7;
+    }
+
+    .tab {
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 550;
+    }
+
+    .tab.active {
+      background: var(--surface-strong);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .inspector { padding: 2px 18px 18px; }
+
+    .selected-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .name { font-size: 18px; font-weight: 750; letter-spacing: 0; }
+    .meta { margin-top: 4px; color: var(--faint); font-size: 12px; }
+
+    .toggle {
+      width: 34px;
+      height: 20px;
+      border-radius: 999px;
+      background: #d7ecff;
+      position: relative;
+      margin-top: 4px;
+    }
+
+    .toggle::after {
+      content: "";
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      right: 4px;
+      top: 4px;
+      background: var(--blue);
+    }
+
+    .section {
+      padding: 18px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      margin-bottom: 12px;
+    }
+
+    .swatches { display: flex; gap: 10px; }
+
+    .swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 1px solid #dadce0;
+      background: var(--color);
+    }
+
+    .swatch.active {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .field {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: #f5f5f7;
+      color: #515154;
+      font-size: 12px;
+    }
+
+    .prompt-card {
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #f7f7f8;
+    }
+
+    .prompt-card p {
+      margin: 0 0 12px;
+      color: #3a3a3c;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .button {
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .history {
+      display: grid;
+      gap: 0;
+    }
+
+    .history-row {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 2px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line-soft);
+      color: #515154;
+      font-size: 12px;
+    }
+
+    .history-row span { color: var(--faint); }
+  </style>
+</head>
+<body class="dark">
+  <main class="app" aria-label="3DPromptStudio frontend mockup">
+    <header class="topbar">
+      <div class="brand">
+        <div class="iconbox">3D</div>
+        <div>3DPromptStudio <span class="subtle">chair workspace</span></div>
+      </div>
+      <div class="actions">
+        <div class="chip"><span class="dot"></span> chair_scene.glb</div>
+        <button class="chip theme-toggle" id="themeToggle" type="button">Light mode</button>
+        <div class="chip">Preview</div>
+        <div class="chip primary">Export</div>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <aside class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Components</div>
+          <div class="small-button">+</div>
+        </div>
+        <div class="search">Search components</div>
+        <div class="tree">
+          <div class="row"><div class="part-icon"></div><div>Dining Chair</div><div class="eye"></div></div>
+          <div class="row child"><div class="part-icon"></div><div>Backrest</div><div class="eye"></div></div>
+          <div class="row child"><div class="part-icon"></div><div>Seat</div><div class="eye"></div></div>
+          <div class="row child selected"><div class="part-icon"></div><div>Cushion</div><div class="eye"></div></div>
+          <div class="row child"><div class="part-icon"></div><div>Front Leg L</div><div class="eye"></div></div>
+          <div class="row child"><div class="part-icon"></div><div>Front Leg R</div><div class="eye"></div></div>
+          <div class="row child"><div class="part-icon"></div><div>Rear Leg L</div><div class="eye"></div></div>
+          <div class="row child"><div class="part-icon"></div><div>Rear Leg R</div><div class="eye"></div></div>
+        </div>
+      </aside>
+
+      <section class="viewport">
+        <div class="grid"></div>
+        <div class="viewport-header">
+          <span>Object viewport</span>
+          <span class="mode">Annotation mode</span>
+        </div>
+        <div class="model-stage">
+          <div class="chair">
+            <div class="back"></div>
+            <div class="seat"></div>
+            <div class="cushion"></div>
+            <div class="leg one"></div>
+            <div class="leg two"></div>
+            <div class="leg three"></div>
+            <div class="leg four"></div>
+          </div>
+        </div>
+        <div class="cut-plane"></div>
+        <div class="guide-line"></div>
+        <div class="annotation"><div class="pin"></div>Change this fabric</div>
+        <div class="ground"></div>
+        <nav class="toolbar" aria-label="Tool mode switcher">
+          <div class="tool">↖</div>
+          <div class="tool active">✎</div>
+          <div class="tool">/</div>
+          <div class="tool">⌁</div>
+          <div class="tool">+</div>
+          <div class="tool">−</div>
+        </nav>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Inspector</div>
+          <div class="small-button">···</div>
+        </div>
+        <div class="tabs">
+          <div class="tab active">Configure</div>
+          <div class="tab">Prompt</div>
+        </div>
+        <div class="inspector">
+          <div class="selected-title">
+            <div>
+              <div class="name">Cushion</div>
+              <div class="meta">mesh · editable · selected</div>
+            </div>
+            <div class="toggle"></div>
+          </div>
+
+          <section class="section">
+            <div class="label">Material color</div>
+            <div class="swatches">
+              <div class="swatch active" style="--color:#8bbe9a"></div>
+              <div class="swatch" style="--color:#2563eb"></div>
+              <div class="swatch" style="--color:#2c2c2e"></div>
+              <div class="swatch" style="--color:#d98e45"></div>
+              <div class="swatch" style="--color:#ffffff"></div>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="label">Scale</div>
+            <div class="fields">
+              <div class="field">X 1.00</div>
+              <div class="field">Y 1.00</div>
+              <div class="field">Z 1.00</div>
+            </div>
+            <div class="label">Position</div>
+            <div class="fields">
+              <div class="field">X 0.00</div>
+              <div class="field">Y 0.18</div>
+              <div class="field">Z 0.00</div>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="label">Prompt preview</div>
+            <div class="prompt-card">
+              <p>Make the annotated cushion navy and change the legs to matte black.</p>
+              <div class="button">Apply prompt</div>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="label">Prompt history</div>
+            <div class="history">
+              <div class="history-row"><span>01</span><div>make the cushion forest green</div></div>
+              <div class="history-row"><span>02</span><div>make the legs black</div></div>
+              <div class="history-row"><span>03</span><div>annotate cushion fabric</div></div>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </section>
+  </main>
+  <script>
+    const toggle = document.getElementById("themeToggle");
+    toggle.addEventListener("click", () => {
+      document.body.classList.toggle("dark");
+      const isDark = document.body.classList.contains("dark");
+      toggle.textContent = isDark ? "Light mode" : "Dark mode";
+    });
+  </script>
+</body>
+</html>
