@@ -1,0 +1,1 @@
+// Variant state service placeholder.

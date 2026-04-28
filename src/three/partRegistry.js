@@ -1,0 +1,1 @@
+// Editable part registry placeholder.

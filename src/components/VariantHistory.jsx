@@ -1,0 +1,1 @@
+// Variant history component placeholder.

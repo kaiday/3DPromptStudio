@@ -1,0 +1,1 @@
+// Error utility placeholder.

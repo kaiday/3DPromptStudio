@@ -1,0 +1,1 @@
+// GLB loading helper placeholder.

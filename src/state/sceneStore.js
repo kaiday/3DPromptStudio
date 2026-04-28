@@ -1,0 +1,1 @@
+// Scene state store placeholder.

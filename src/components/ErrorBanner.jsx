@@ -1,0 +1,1 @@
+// Error display component placeholder.
