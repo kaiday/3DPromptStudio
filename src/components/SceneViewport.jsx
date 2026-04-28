@@ -6,6 +6,7 @@ import { createPartRegistry } from '../three/partRegistry.js';
 import { collectMeshMetadata } from '../three/sceneTraversal.js';
 import { applyEditOperations } from '../three/applyEditOperations.js';
 import { disposeObject3D } from '../three/disposeScene.js';
+import { downloadGlb } from '../three/exportGlb.js';
 
 export function SceneViewport({ command, modelFile, onError, onModelLoaded, onOperationResult }) {
   const containerRef = useRef(null);
@@ -85,11 +86,31 @@ export function SceneViewport({ command, modelFile, onError, onModelLoaded, onOp
     if (!command || !registryRef.current) return;
 
     setViewportError('');
+    if (command.operation.op === 'export_glb') {
+      if (!loadedModelRef.current) {
+        onOperationResult?.({ summary: 'Load a model before exporting.' });
+        return;
+      }
+
+      setLoadingMessage('Exporting GLB...');
+      downloadGlb(loadedModelRef.current, command.operation.filename)
+        .then((result) => {
+          onOperationResult?.({ summary: `Exported ${result.filename} (${Math.round(result.size / 1024)} KB).` });
+        })
+        .catch((error) => {
+          const message = `Could not export model: ${error.message}`;
+          setViewportError(message);
+          onError?.(message);
+        })
+        .finally(() => setLoadingMessage(''));
+      return;
+    }
+
     setLoadingMessage('Applying edit...');
     const result = applyEditOperations(registryRef.current, [command.operation]);
     onOperationResult?.(result);
     window.requestAnimationFrame(() => setLoadingMessage(''));
-  }, [command, onOperationResult]);
+  }, [command, onError, onOperationResult]);
 
   return (
     <div className="sceneViewportFrame">

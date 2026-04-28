@@ -26,6 +26,16 @@ export function App() {
     setCommand({ id: crypto.randomUUID(), operation });
   }
 
+  function exportModel() {
+    if (!modelFile) {
+      setStatus('Load a GLB model before exporting.');
+      return;
+    }
+
+    const baseName = modelFile.name.replace(/\.(glb|gltf)$/i, '') || 'customized-model';
+    sendOperation({ op: 'export_glb', filename: `${baseName}-customized.glb` });
+  }
+
   function requireSelection(operationFactory) {
     if (!selectedPartId) {
       setStatus('Select a detected mesh part before applying a test operation.');
@@ -103,6 +113,14 @@ export function App() {
           <button className="wideButton" type="button" onClick={() => sendOperation({ op: 'reset_all' })}>
             Reset Full Model
           </button>
+        </section>
+
+        <section className="panelSection">
+          <h2>Export</h2>
+          <button className="wideButton" type="button" onClick={exportModel}>
+            Download Customized GLB
+          </button>
+          <p className="statusText">Exports the currently visible customized model from the browser. Hidden parts stay hidden in the export.</p>
         </section>
 
         <section className="panelSection">
