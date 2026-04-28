@@ -39,3 +39,26 @@ CREATE TABLE IF NOT EXISTS model_components (
 
 CREATE INDEX IF NOT EXISTS idx_model_components_project_id ON model_components (project_id);
 CREATE INDEX IF NOT EXISTS idx_model_components_model_id ON model_components (model_id);
+
+CREATE TABLE IF NOT EXISTS annotations (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  variant_id TEXT,
+  part_id TEXT,
+  type TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  position_json TEXT,
+  normal_json TEXT,
+  screen_position_json TEXT,
+  points_json TEXT,
+  note TEXT NOT NULL DEFAULT '',
+  author_id TEXT NOT NULL DEFAULT 'anonymous',
+  session_id TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_annotations_project_id ON annotations (project_id);
+CREATE INDEX IF NOT EXISTS idx_annotations_part_id ON annotations (part_id);
+CREATE INDEX IF NOT EXISTS idx_annotations_variant_id ON annotations (variant_id);

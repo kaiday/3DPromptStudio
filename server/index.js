@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { handleAnnotationRoute, matchAnnotationRoute } from './routes/annotationRoutes.js';
 import { handleComponentRoute, matchComponentRoute } from './routes/componentRoutes.js';
 import { handleWorkspaceRoute, matchWorkspaceRoute } from './routes/workspaceRoutes.js';
 
@@ -26,6 +27,12 @@ export async function handleRequest(request, response) {
   const componentRoute = matchComponentRoute(url.pathname);
   if (componentRoute) {
     await handleComponentRoute(request, response, componentRoute);
+    return;
+  }
+
+  const annotationRoute = matchAnnotationRoute(url.pathname);
+  if (annotationRoute) {
+    await handleAnnotationRoute(request, response, annotationRoute, url.searchParams);
     return;
   }
 
