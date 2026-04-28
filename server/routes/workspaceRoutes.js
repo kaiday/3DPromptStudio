@@ -1,4 +1,4 @@
-import { getWorkspace, updateWorkspace } from '../services/workspaceService.js';
+import { getWorkspace, redoWorkspace, undoWorkspace, updateWorkspace } from '../services/workspaceService.js';
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
@@ -35,20 +35,30 @@ function parseJsonBody(request) {
 }
 
 export function matchWorkspaceRoute(pathname) {
-  const match = pathname.match(/^\/api\/projects\/([^/]+)\/workspace$/);
-  return match ? { projectId: decodeURIComponent(match[1]) } : null;
+  const match = pathname.match(/^\/api\/projects\/([^/]+)\/workspace(?:\/(undo|redo))?$/);
+  return match ? { projectId: decodeURIComponent(match[1]), action: match[2] ?? null } : null;
 }
 
-export async function handleWorkspaceRoute(request, response, { projectId }) {
+export async function handleWorkspaceRoute(request, response, { projectId, action }) {
   try {
-    if (request.method === 'GET') {
-      sendJson(response, 200, { workspace: getWorkspace(projectId) });
+    if (request.method === 'GET' && !action) {
+      sendJson(response, 200, { workspace: await getWorkspace(projectId) });
       return true;
     }
 
-    if (request.method === 'PATCH') {
+    if (request.method === 'PATCH' && !action) {
       const patch = await parseJsonBody(request);
-      sendJson(response, 200, { workspace: updateWorkspace(projectId, patch) });
+      sendJson(response, 200, { workspace: await updateWorkspace(projectId, patch) });
+      return true;
+    }
+
+    if (request.method === 'POST' && action === 'undo') {
+      sendJson(response, 200, { workspace: await undoWorkspace(projectId) });
+      return true;
+    }
+
+    if (request.method === 'POST' && action === 'redo') {
+      sendJson(response, 200, { workspace: await redoWorkspace(projectId) });
       return true;
     }
 

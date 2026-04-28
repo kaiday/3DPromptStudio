@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { handleAnnotationRoute, matchAnnotationRoute } from './routes/annotationRoutes.js';
 import { handleComponentRoute, matchComponentRoute } from './routes/componentRoutes.js';
+import { handlePromptRoute, matchPromptRoute } from './routes/promptRoutes.js';
 import { handleWorkspaceRoute, matchWorkspaceRoute } from './routes/workspaceRoutes.js';
 
 const DEFAULT_PORT = 3001;
@@ -33,6 +34,12 @@ export async function handleRequest(request, response) {
   const annotationRoute = matchAnnotationRoute(url.pathname);
   if (annotationRoute) {
     await handleAnnotationRoute(request, response, annotationRoute, url.searchParams);
+    return;
+  }
+
+  const promptRoute = matchPromptRoute(url.pathname);
+  if (promptRoute) {
+    await handlePromptRoute(request, response, promptRoute);
     return;
   }
 

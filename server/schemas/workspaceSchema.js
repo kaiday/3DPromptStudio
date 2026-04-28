@@ -1,5 +1,6 @@
 export const WORKSPACE_TOOLS = Object.freeze(['mouse', 'annotation', 'line', 'cut', 'zoom']);
 export const RIGHT_PANEL_MODES = Object.freeze(['config', 'prompt']);
+export const MAX_HISTORY_ITEMS = 50;
 
 const DEFAULT_CAMERA_POSITION = [3, 2.2, 4];
 const DEFAULT_CAMERA_TARGET = [0, 0.8, 0];
@@ -54,6 +55,41 @@ function normalizeViewport(value = {}) {
   };
 }
 
+function normalizeOperation(operation, index) {
+  if (!operation || typeof operation !== 'object' || Array.isArray(operation)) {
+    throw new Error(`operations[${index}] must be an object.`);
+  }
+
+  const opType = normalizeString(operation.op, null, `operations[${index}].op`);
+  if (!opType) {
+    throw new Error(`operations[${index}].op is required.`);
+  }
+
+  return {
+    op: opType,
+    targetId: normalizeString(operation.targetId, null, `operations[${index}].targetId`),
+    payload: operation.payload && typeof operation.payload === 'object' ? { ...operation.payload } : {},
+    timestamp: normalizeString(operation.timestamp, new Date().toISOString(), `operations[${index}].timestamp`)
+  };
+}
+
+function normalizeList(value, fieldName) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error(`${fieldName} must be an array.`);
+  return value;
+}
+
+function normalizeHistory(input = {}) {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('history must be an object.');
+  }
+
+  const past = normalizeList(input.past, 'history.past').slice(-MAX_HISTORY_ITEMS);
+  const future = normalizeList(input.future, 'history.future').slice(-MAX_HISTORY_ITEMS);
+
+  return { past, future };
+}
+
 export function createDefaultWorkspace(projectId, overrides = {}) {
   if (!projectId) {
     throw new Error('projectId is required to create a workspace.');
@@ -68,6 +104,11 @@ export function createDefaultWorkspace(projectId, overrides = {}) {
     selectedPartId: overrides.selectedPartId ?? null,
     rightPanelMode: overrides.rightPanelMode ?? 'config',
     viewport: overrides.viewport ?? {},
+    scene: overrides.scene ?? { components: [] },
+    lastOperations: overrides.lastOperations ?? [],
+    promptHistory: overrides.promptHistory ?? [],
+    variantHistory: overrides.variantHistory ?? [],
+    history: overrides.history ?? { past: [], future: [] },
     hasUnsavedOperations: overrides.hasUnsavedOperations ?? false,
     updatedAt: overrides.updatedAt ?? new Date().toISOString()
   });
@@ -90,6 +131,27 @@ export function normalizeWorkspace(input) {
     selectedPartId: normalizeString(input.selectedPartId, null, 'selectedPartId'),
     rightPanelMode: normalizeEnum(input.rightPanelMode, 'config', RIGHT_PANEL_MODES, 'rightPanelMode'),
     viewport: normalizeViewport(input.viewport),
+    scene: input.scene && typeof input.scene === 'object' && !Array.isArray(input.scene)
+      ? { components: Array.isArray(input.scene.components) ? input.scene.components : [] }
+      : { components: [] },
+    lastOperations: normalizeList(input.lastOperations, 'lastOperations')
+      .map((operation, index) => normalizeOperation(operation, index))
+      .slice(-25),
+    promptHistory: normalizeList(input.promptHistory, 'promptHistory')
+      .map((entry, index) => ({
+        id: normalizeString(entry?.id, `prompt_${index + 1}`, `promptHistory[${index}].id`),
+        prompt: normalizeString(entry?.prompt, '', `promptHistory[${index}].prompt`),
+        createdAt: normalizeString(entry?.createdAt, new Date().toISOString(), `promptHistory[${index}].createdAt`)
+      }))
+      .slice(-MAX_HISTORY_ITEMS),
+    variantHistory: normalizeList(input.variantHistory, 'variantHistory')
+      .map((entry, index) => ({
+        id: normalizeString(entry?.id, `variant_${index + 1}`, `variantHistory[${index}].id`),
+        label: normalizeString(entry?.label, 'Variant', `variantHistory[${index}].label`),
+        createdAt: normalizeString(entry?.createdAt, new Date().toISOString(), `variantHistory[${index}].createdAt`)
+      }))
+      .slice(-MAX_HISTORY_ITEMS),
+    history: normalizeHistory(input.history),
     hasUnsavedOperations: Boolean(input.hasUnsavedOperations),
     updatedAt: normalizeString(input.updatedAt, new Date().toISOString(), 'updatedAt')
   };
@@ -113,6 +175,11 @@ export function mergeWorkspacePatch(currentWorkspace, patch) {
         ...(patch.viewport?.visibleHelpers ?? {})
       }
     },
+    scene: patch.scene ?? currentWorkspace.scene,
+    lastOperations: patch.lastOperations ?? currentWorkspace.lastOperations,
+    promptHistory: patch.promptHistory ?? currentWorkspace.promptHistory,
+    variantHistory: patch.variantHistory ?? currentWorkspace.variantHistory,
+    history: patch.history ?? currentWorkspace.history,
     updatedAt: new Date().toISOString()
   });
 }

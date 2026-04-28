@@ -61,6 +61,18 @@ function normalizePoints(value) {
   return value.map((point, index) => normalizeVector(point, null, `points[${index}]`));
 }
 
+function normalizeCutPlane(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('cutPlane must be an object.');
+  }
+
+  return {
+    origin: normalizeVector(value.origin, [0, 0, 0], 'cutPlane.origin'),
+    normal: normalizeVector(value.normal, [0, 1, 0], 'cutPlane.normal')
+  };
+}
+
 function createAnnotationId() {
   return `anno_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -80,6 +92,7 @@ export function normalizeAnnotation(input, defaults = {}) {
   const screenPosition = normalizeScreenPosition(input.screenPosition);
   const points = normalizePoints(input.points);
   const screenPoints = normalizeScreenPoints(input.screenPoints);
+  const cutPlane = normalizeCutPlane(input.cutPlane);
 
   if (targetType === 'component' && !normalizeString(input.partId, defaults.partId ?? null, 'partId')) {
     throw new Error('partId is required for component annotations.');
@@ -91,6 +104,10 @@ export function normalizeAnnotation(input, defaults = {}) {
 
   if (type === 'line' && points.length < 2 && screenPoints.length < 2) {
     throw new Error('line annotations require at least two points or two screenPoints.');
+  }
+
+  if (type === 'cut_guide' && points.length < 2 && screenPoints.length < 2 && !cutPlane) {
+    throw new Error('cut_guide annotations require at least two points, two screenPoints, or a cutPlane.');
   }
 
   return {
@@ -105,6 +122,7 @@ export function normalizeAnnotation(input, defaults = {}) {
     screenPosition,
     points,
     screenPoints,
+    cutPlane,
     label: normalizeString(input.label, defaults.label ?? '', 'label'),
     note: normalizeString(input.note, defaults.note ?? '', 'note'),
     authorId: normalizeString(input.authorId, defaults.authorId ?? 'anonymous', 'authorId'),

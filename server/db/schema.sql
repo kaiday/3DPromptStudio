@@ -14,6 +14,17 @@ CREATE TABLE IF NOT EXISTS workspaces (
 
 CREATE INDEX IF NOT EXISTS idx_workspaces_project_id ON workspaces (project_id);
 
+CREATE TABLE IF NOT EXISTS workspace_history (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_history_project_id ON workspace_history (project_id);
+
 CREATE TABLE IF NOT EXISTS component_registries (
   project_id TEXT PRIMARY KEY,
   model_id TEXT,
@@ -52,6 +63,7 @@ CREATE TABLE IF NOT EXISTS annotations (
   screen_position_json TEXT,
   points_json TEXT,
   screen_points_json TEXT,
+  cut_plane_json TEXT,
   label TEXT NOT NULL DEFAULT '',
   note TEXT NOT NULL DEFAULT '',
   author_id TEXT NOT NULL DEFAULT 'anonymous',
