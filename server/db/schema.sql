@@ -13,3 +13,29 @@ CREATE TABLE IF NOT EXISTS workspaces (
 );
 
 CREATE INDEX IF NOT EXISTS idx_workspaces_project_id ON workspaces (project_id);
+
+CREATE TABLE IF NOT EXISTS component_registries (
+  project_id TEXT PRIMARY KEY,
+  model_id TEXT,
+  registry_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS model_components (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  model_id TEXT,
+  mesh_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  material_name TEXT,
+  editable INTEGER NOT NULL DEFAULT 1,
+  allowed_operations_json TEXT NOT NULL,
+  transform_bounds_json TEXT NOT NULL,
+  original_snapshot_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_model_components_project_id ON model_components (project_id);
+CREATE INDEX IF NOT EXISTS idx_model_components_model_id ON model_components (model_id);

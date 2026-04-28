@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { handleComponentRoute, matchComponentRoute } from './routes/componentRoutes.js';
 import { handleWorkspaceRoute, matchWorkspaceRoute } from './routes/workspaceRoutes.js';
 
 const DEFAULT_PORT = 3001;
@@ -19,6 +20,12 @@ export async function handleRequest(request, response) {
   const workspaceRoute = matchWorkspaceRoute(url.pathname);
   if (workspaceRoute) {
     await handleWorkspaceRoute(request, response, workspaceRoute);
+    return;
+  }
+
+  const componentRoute = matchComponentRoute(url.pathname);
+  if (componentRoute) {
+    await handleComponentRoute(request, response, componentRoute);
     return;
   }
 
