@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createCameraControls } from '../three/cameraControls.js';
 import { initRenderer } from '../three/initRenderer.js';
 import { loadGlbModel } from '../three/loadGlbModel.js';
@@ -12,6 +12,8 @@ export function SceneViewport({ command, modelFile, onError, onModelLoaded, onOp
   const rendererRef = useRef(null);
   const loadedModelRef = useRef(null);
   const registryRef = useRef(null);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [viewportError, setViewportError] = useState('');
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -37,6 +39,9 @@ export function SceneViewport({ command, modelFile, onError, onModelLoaded, onOp
 
     async function loadModel() {
       try {
+        setViewportError('');
+        setLoadingMessage(`Loading ${modelFile.name}...`);
+
         if (loadedModelRef.current) {
           disposeObject3D(loadedModelRef.current);
           context.modelGroup.remove(loadedModelRef.current);
@@ -56,8 +61,13 @@ export function SceneViewport({ command, modelFile, onError, onModelLoaded, onOp
         context.resetView();
         onModelLoaded?.({ parts, root: loaded.root });
       } catch (error) {
-        onError?.(`Could not load model: ${error.message}`);
+        const message = `Could not load model: ${error.message}`;
+        setViewportError(message);
+        onError?.(message);
       } finally {
+        if (!isCancelled) {
+          setLoadingMessage('');
+        }
         URL.revokeObjectURL(objectUrl);
         objectUrl = null;
       }
@@ -74,9 +84,27 @@ export function SceneViewport({ command, modelFile, onError, onModelLoaded, onOp
   useEffect(() => {
     if (!command || !registryRef.current) return;
 
+    setViewportError('');
+    setLoadingMessage('Applying edit...');
     const result = applyEditOperations(registryRef.current, [command.operation]);
     onOperationResult?.(result);
+    window.requestAnimationFrame(() => setLoadingMessage(''));
   }, [command, onOperationResult]);
 
-  return <div className="sceneViewport" ref={containerRef} aria-label="3D model viewport" />;
+  return (
+    <div className="sceneViewportFrame">
+      <div className="sceneViewport" ref={containerRef} aria-label="3D model viewport" />
+      {loadingMessage ? (
+        <div className="viewportState" role="status" aria-live="polite">
+          <span className="loadingSpinner" aria-hidden="true" />
+          <strong>{loadingMessage}</strong>
+        </div>
+      ) : null}
+      {viewportError ? (
+        <div className="viewportState isError" role="alert">
+          <strong>{viewportError}</strong>
+        </div>
+      ) : null}
+    </div>
+  );
 }
