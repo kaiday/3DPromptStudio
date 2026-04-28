@@ -22,6 +22,9 @@ export function listAnnotations(projectId, filters = {}) {
   if (filters.variantId) {
     annotations = annotations.filter((annotation) => annotation.variantId === filters.variantId);
   }
+  if (filters.type) {
+    annotations = annotations.filter((annotation) => annotation.type === filters.type);
+  }
 
   return annotations;
 }

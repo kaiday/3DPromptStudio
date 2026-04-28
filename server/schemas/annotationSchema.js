@@ -1,4 +1,4 @@
-export const ANNOTATION_TYPES = Object.freeze(['pin', 'region', 'freehand_note', 'text_note', 'cut_guide']);
+export const ANNOTATION_TYPES = Object.freeze(['pin', 'region', 'freehand_note', 'text_note', 'cut_guide', 'line']);
 export const ANNOTATION_TARGET_TYPES = Object.freeze(['model', 'component', 'surface_point']);
 export const ANNOTATION_STATUSES = Object.freeze(['open', 'resolved', 'archived']);
 
@@ -43,6 +43,18 @@ function normalizeScreenPosition(value) {
   };
 }
 
+function normalizeScreenPoints(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error('screenPoints must be an array.');
+  return value.map((point, index) => {
+    try {
+      return normalizeScreenPosition(point);
+    } catch (error) {
+      throw new Error(`screenPoints[${index}] ${error.message}`);
+    }
+  });
+}
+
 function normalizePoints(value) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw new Error('points must be an array.');
@@ -66,6 +78,8 @@ export function normalizeAnnotation(input, defaults = {}) {
   const targetType = normalizeEnum(input.targetType, defaults.targetType ?? (input.partId ? 'component' : 'model'), ANNOTATION_TARGET_TYPES, 'targetType');
   const position = normalizeVector(input.position, null, 'position');
   const screenPosition = normalizeScreenPosition(input.screenPosition);
+  const points = normalizePoints(input.points);
+  const screenPoints = normalizeScreenPoints(input.screenPoints);
 
   if (targetType === 'component' && !normalizeString(input.partId, defaults.partId ?? null, 'partId')) {
     throw new Error('partId is required for component annotations.');
@@ -73,6 +87,10 @@ export function normalizeAnnotation(input, defaults = {}) {
 
   if (targetType === 'surface_point' && !position && !screenPosition) {
     throw new Error('surface_point annotations require position or screenPosition.');
+  }
+
+  if (type === 'line' && points.length < 2 && screenPoints.length < 2) {
+    throw new Error('line annotations require at least two points or two screenPoints.');
   }
 
   return {
@@ -85,7 +103,9 @@ export function normalizeAnnotation(input, defaults = {}) {
     position,
     normal: normalizeVector(input.normal, null, 'normal'),
     screenPosition,
-    points: normalizePoints(input.points),
+    points,
+    screenPoints,
+    label: normalizeString(input.label, defaults.label ?? '', 'label'),
     note: normalizeString(input.note, defaults.note ?? '', 'note'),
     authorId: normalizeString(input.authorId, defaults.authorId ?? 'anonymous', 'authorId'),
     sessionId: normalizeString(input.sessionId, defaults.sessionId ?? null, 'sessionId'),

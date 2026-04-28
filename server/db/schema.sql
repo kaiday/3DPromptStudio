@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS annotations (
   normal_json TEXT,
   screen_position_json TEXT,
   points_json TEXT,
+  screen_points_json TEXT,
+  label TEXT NOT NULL DEFAULT '',
   note TEXT NOT NULL DEFAULT '',
   author_id TEXT NOT NULL DEFAULT 'anonymous',
   session_id TEXT,

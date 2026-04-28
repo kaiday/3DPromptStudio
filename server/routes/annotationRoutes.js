@@ -58,7 +58,8 @@ export async function handleAnnotationRoute(request, response, { projectId, anno
         annotations: listAnnotations(projectId, {
           status: searchParams.get('status'),
           partId: searchParams.get('partId'),
-          variantId: searchParams.get('variantId')
+          variantId: searchParams.get('variantId'),
+          type: searchParams.get('type')
         })
       });
       return true;
