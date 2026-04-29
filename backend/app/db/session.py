@@ -59,6 +59,16 @@ def init_db() -> None:
             """
         )
         connection.execute("CREATE INDEX IF NOT EXISTS idx_models_project_id ON models (project_id)")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS component_registries (
+              project_id TEXT PRIMARY KEY,
+              model_id TEXT,
+              registry_json TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
         connection.commit()
 
 
