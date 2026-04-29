@@ -13,6 +13,10 @@ class Settings(BaseModel):
     ai_prompt_provider: str = "deterministic"
     openai_api_key: str | None = None
     openai_prompt_model: str = "gpt-4o-mini"
+    generation_provider: str = "fake"
+    generation_fake_delay_seconds: float = 2.0
+    generation_event_poll_seconds: float = 0.5
+    generation_job_timeout_seconds: int = 900
 
 
 @lru_cache
@@ -26,4 +30,8 @@ def get_settings() -> Settings:
         ai_prompt_provider=getenv("AI_PROMPT_PROVIDER", "deterministic"),
         openai_api_key=getenv("OPENAI_API_KEY"),
         openai_prompt_model=getenv("OPENAI_PROMPT_MODEL", "gpt-4o-mini"),
+        generation_provider=getenv("GENERATION_PROVIDER", "fake"),
+        generation_fake_delay_seconds=float(getenv("GENERATION_FAKE_DELAY_SECONDS", "2")),
+        generation_event_poll_seconds=float(getenv("GENERATION_EVENT_POLL_SECONDS", "0.5")),
+        generation_job_timeout_seconds=int(getenv("GENERATION_JOB_TIMEOUT_SECONDS", "900")),
     )

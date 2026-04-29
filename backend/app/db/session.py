@@ -116,6 +116,45 @@ def init_db() -> None:
             """
         )
         connection.execute("CREATE INDEX IF NOT EXISTS idx_export_requests_project_id ON export_requests (project_id)")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS generation_jobs (
+              id TEXT PRIMARY KEY,
+              project_id TEXT NOT NULL,
+              prompt TEXT NOT NULL,
+              status TEXT NOT NULL,
+              provider TEXT NOT NULL,
+              placement_json TEXT NOT NULL,
+              style TEXT,
+              mode TEXT NOT NULL DEFAULT 'asset',
+              metadata_json TEXT NOT NULL DEFAULT '{}',
+              asset_id TEXT,
+              model_url TEXT,
+              metadata_url TEXT,
+              error_message TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              completed_at TEXT
+            )
+            """
+        )
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_generation_jobs_project_id ON generation_jobs (project_id)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_generation_jobs_status ON generation_jobs (status)")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS generation_events (
+              id TEXT PRIMARY KEY,
+              job_id TEXT NOT NULL,
+              project_id TEXT NOT NULL,
+              type TEXT NOT NULL,
+              message TEXT NOT NULL DEFAULT '',
+              payload_json TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_generation_events_job_id ON generation_events (job_id)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_generation_events_project_id ON generation_events (project_id)")
         connection.commit()
 
 
