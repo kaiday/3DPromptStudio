@@ -71,6 +71,36 @@ def init_db() -> None:
         )
         connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS annotations (
+              id TEXT PRIMARY KEY,
+              project_id TEXT NOT NULL,
+              variant_id TEXT,
+              part_id TEXT,
+              type TEXT NOT NULL,
+              target_type TEXT NOT NULL,
+              position_json TEXT,
+              normal_json TEXT,
+              screen_position_json TEXT,
+              points_json TEXT NOT NULL,
+              screen_points_json TEXT NOT NULL,
+              cut_plane_json TEXT,
+              label TEXT NOT NULL DEFAULT '',
+              note TEXT NOT NULL DEFAULT '',
+              author_id TEXT NOT NULL DEFAULT 'anonymous',
+              session_id TEXT,
+              status TEXT NOT NULL DEFAULT 'open',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_annotations_project_id ON annotations (project_id)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_annotations_part_id ON annotations (part_id)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_annotations_variant_id ON annotations (variant_id)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_annotations_type ON annotations (type)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_annotations_status ON annotations (status)")
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS export_requests (
               id TEXT PRIMARY KEY,
               project_id TEXT NOT NULL,
