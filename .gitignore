@@ -144,3 +144,9 @@ vite.config.ts.timestamp-*
 
 # Local backend persistence for no-env demos
 server/db/.data/
+
+# Python backend
+__pycache__/
+*.py[cod]
+.pytest_cache/
+backend/.data/
