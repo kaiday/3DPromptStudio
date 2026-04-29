@@ -77,6 +77,7 @@ class WorkspaceSnapshot(CamelModel):
     right_panel_mode: RightPanelMode = Field(default="config", alias="rightPanelMode")
     current_variant_id: str | None = Field(default=None, alias="currentVariantId")
     last_operations: list[WorkspaceOperation] = Field(default_factory=list, alias="lastOperations")
+    ai_operation_history: list[dict[str, Any]] = Field(default_factory=list, alias="aiOperationHistory")
 
 
 class WorkspaceHistory(CamelModel):
@@ -101,6 +102,7 @@ class Workspace(CamelModel):
     viewport: ViewportState = Field(default_factory=ViewportState)
     scene: SceneState = Field(default_factory=SceneState)
     last_operations: list[WorkspaceOperation] = Field(default_factory=list, alias="lastOperations")
+    ai_operation_history: list[dict[str, Any]] = Field(default_factory=list, alias="aiOperationHistory")
     prompt_history: list[PromptHistoryEntry] = Field(default_factory=list, alias="promptHistory")
     variant_history: list[VariantHistoryEntry] = Field(default_factory=list, alias="variantHistory")
     history: WorkspaceHistory = Field(default_factory=WorkspaceHistory)
@@ -110,6 +112,7 @@ class Workspace(CamelModel):
     @model_validator(mode="after")
     def limit_lists(self) -> "Workspace":
         self.last_operations = self.last_operations[-25:]
+        self.ai_operation_history = self.ai_operation_history[-MAX_HISTORY_ITEMS:]
         self.prompt_history = self.prompt_history[-MAX_HISTORY_ITEMS:]
         self.variant_history = self.variant_history[-MAX_HISTORY_ITEMS:]
         return self
@@ -131,6 +134,7 @@ class WorkspacePatch(CamelModel):
     viewport: ViewportPatch | None = None
     scene: SceneState | None = None
     last_operations: list[WorkspaceOperation] | None = Field(default=None, alias="lastOperations")
+    ai_operation_history: list[dict[str, Any]] | None = Field(default=None, alias="aiOperationHistory")
     prompt_history: list[PromptHistoryEntry] | None = Field(default=None, alias="promptHistory")
     variant_history: list[VariantHistoryEntry] | None = Field(default=None, alias="variantHistory")
     has_unsaved_operations: bool | None = Field(default=None, alias="hasUnsavedOperations")
@@ -148,4 +152,5 @@ def snapshot_workspace(workspace: Workspace) -> WorkspaceSnapshot:
         rightPanelMode=workspace.right_panel_mode,
         currentVariantId=workspace.current_variant_id,
         lastOperations=workspace.last_operations,
+        aiOperationHistory=workspace.ai_operation_history,
     )

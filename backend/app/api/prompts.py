@@ -1,24 +1,42 @@
 import sqlite3
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 
 from app.db.session import get_db
-from app.schemas.prompts import PromptRequest
-from app.services.prompt_context_service import build_prompt_context
-from app.services.prompt_service import apply_prompt
-from app.services.workspace_service import get_workspace
+from app.schemas.prompts import PromptInterpretRequest
+from app.services.component_service import get_component_registry
+from app.services.operation_service import OperationValidationError
+from app.services.prompt_service import interpret_prompt as interpret_prompt_request
 
 router = APIRouter(prefix="/projects/{project_id}/prompt", tags=["prompts"])
 
 
 @router.post("")
-def post_prompt(project_id: str, payload: PromptRequest, db: sqlite3.Connection = Depends(get_db)):
-    workspace = get_workspace(db, project_id)
-    prompt_context = build_prompt_context(db, workspace)
-    updated_workspace, operations, reasoning = apply_prompt(db, project_id, payload.prompt, prompt_context)
+def interpret_prompt(
+    project_id: str,
+    payload: PromptInterpretRequest,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    registry = get_component_registry(db, project_id)
+    try:
+        response, source = interpret_prompt_request(project_id, payload, registry, db)
+    except OperationValidationError as error:
+        body = {
+            "ok": False,
+            "source": "prompt_interpreter",
+            "requiresClarification": error.error.code == "AMBIGUOUS_TARGET",
+            "requiresGeneration": error.error.code == "STRUCTURAL_EDIT_REQUIRES_GENERATION",
+            "error": error.error.model_dump(by_alias=True),
+        }
+        return JSONResponse(status_code=400, content=body)
     return {
-        "workspace": updated_workspace.model_dump(by_alias=True),
-        "operations": [operation.model_dump(by_alias=True) for operation in operations],
-        "reasoning": reasoning,
-        "promptContext": prompt_context.model_dump(by_alias=True),
+        "ok": True,
+        "source": source,
+        "operations": [operation.model_dump(by_alias=True) for operation in response.operations],
+        "warnings": [warning.model_dump(by_alias=True) for warning in response.warnings],
+        "revisionId": response.revision_id,
+        "workspace": response.workspace,
+        "requiresClarification": False,
+        "requiresGeneration": False,
     }

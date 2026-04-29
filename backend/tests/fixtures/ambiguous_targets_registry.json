@@ -1,0 +1,19 @@
+{
+  "modelId": "model_ambiguous_targets",
+  "components": [
+    {
+      "id": "stop_sign_left",
+      "name": "STOP sign",
+      "meshName": "StopSign_Left",
+      "editable": true,
+      "allowedOperations": ["setColor", "setVisibility", "setScale"]
+    },
+    {
+      "id": "school_zone_sign",
+      "name": "School zone sign",
+      "meshName": "SchoolZoneSign",
+      "editable": true,
+      "allowedOperations": ["setColor", "setVisibility", "setScale"]
+    }
+  ]
+}

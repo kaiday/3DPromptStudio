@@ -1,0 +1,22 @@
+{
+  "cases": [
+    {
+      "name": "target not found",
+      "operation": {
+        "type": "setColor",
+        "target": { "componentId": "missing_part" },
+        "payload": { "color": "#EF4444" }
+      },
+      "expect": { "ok": false, "code": "TARGET_NOT_FOUND" }
+    },
+    {
+      "name": "operation not allowed",
+      "operation": {
+        "type": "setScale",
+        "target": { "componentId": "road_main" },
+        "payload": { "scale": [1.25, 1.25, 1.25], "mode": "multiply" }
+      },
+      "expect": { "ok": false, "code": "OPERATION_NOT_ALLOWED" }
+    }
+  ]
+}

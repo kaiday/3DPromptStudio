@@ -62,7 +62,6 @@ def save_workspace(db: sqlite3.Connection, workspace: Workspace) -> Workspace:
     db.commit()
     return workspace
 
-
 def get_workspace(db: sqlite3.Connection, project_id: str) -> Workspace:
     record = db.execute(
         "SELECT workspace_state_json FROM workspaces WHERE project_id = ?",

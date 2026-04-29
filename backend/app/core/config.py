@@ -10,6 +10,9 @@ class Settings(BaseModel):
     database_url: str = "sqlite:///./.data/3dpromptstudio.db"
     model_storage_dir: str = "./.data/models"
     max_model_upload_bytes: int = 50 * 1024 * 1024
+    ai_prompt_provider: str = "deterministic"
+    openai_api_key: str | None = None
+    openai_prompt_model: str = "gpt-4o-mini"
 
 
 @lru_cache
@@ -20,4 +23,7 @@ def get_settings() -> Settings:
         database_url=getenv("DATABASE_URL", "sqlite:///./.data/3dpromptstudio.db"),
         model_storage_dir=getenv("MODEL_STORAGE_DIR", "./.data/models"),
         max_model_upload_bytes=int(getenv("MAX_MODEL_UPLOAD_BYTES", str(50 * 1024 * 1024))),
+        ai_prompt_provider=getenv("AI_PROMPT_PROVIDER", "deterministic"),
+        openai_api_key=getenv("OPENAI_API_KEY"),
+        openai_prompt_model=getenv("OPENAI_PROMPT_MODEL", "gpt-4o-mini"),
     )
