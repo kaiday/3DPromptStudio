@@ -9,7 +9,7 @@ AI-customizable 3D product configurator for Blender assets.
 This repository follows the architecture note in `Architecture_3DPromptStudio.md` from the Obsidian vault:
 
 - `src/` - React frontend, Three.js rendering, app state, client API modules, and shared frontend schemas.
-- `server/` - backend API, OpenAI prompt-to-operation service, validation, persistence, storage, and utilities.
-- `server/db/` - database client, schema, and migrations.
+- `backend/` - active Python FastAPI backend, prompt-to-operation service, validation, SQLite persistence, GLB upload storage, annotations, operations, and export intent APIs.
+- `server/` - legacy JavaScript prototype kept as behavior reference only. Do not add new backend features here.
 
-The initial files are placeholders so implementation can proceed module by module without changing the planned structure.
+The Python backend is the backend source of truth for new work. Run and test it from `backend/`.
