@@ -1,15 +1,26 @@
 const API_ROOT = '/api';
 
+export async function parseJsonResponse(response, fallbackMessage) {
+  const text = await response.text();
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { detail: text };
+  }
+  if (!response.ok) {
+    const message = payload.error?.message ?? payload.error ?? payload.detail ?? fallbackMessage ?? `Request failed (${response.status}).`;
+    throw new Error(message);
+  }
+  return payload;
+}
+
 async function requestJson(path, options = {}) {
   const response = await fetch(`${API_ROOT}${path}`, {
     headers: { 'content-type': 'application/json', ...(options.headers ?? {}) },
     ...options
   });
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed (${response.status}).`);
-  }
-  return payload;
+  return parseJsonResponse(response);
 }
 
 export async function fetchWorkspace(projectId) {

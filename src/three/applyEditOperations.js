@@ -3,9 +3,9 @@ export function applyEditOperations(scene, operations) {
   return {
     ...scene,
     components: components.map((component) => {
-      const componentOperations = operations.filter((operation) => operation.targetId === component.id);
+      const componentOperations = operations.filter((operation) => getOperationTargetId(operation) === component.id);
       return componentOperations.reduce((next, operation) => {
-        switch (operation.op) {
+        switch (operation.type ?? operation.op) {
           case 'setColor':
             return {
               ...next,
@@ -22,4 +22,13 @@ export function applyEditOperations(scene, operations) {
       }, component);
     })
   };
+}
+
+function getOperationTargetId(operation) {
+  return (
+    operation.target?.componentId ??
+    operation.target?.partId ??
+    operation.targetId ??
+    null
+  );
 }

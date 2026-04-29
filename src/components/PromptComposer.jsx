@@ -12,17 +12,23 @@ export function PromptComposer({ onSubmit, disabled = false }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 8 }}>
-      <textarea
-        value={prompt}
-        onChange={(event) => setPrompt(event.target.value)}
-        placeholder="Describe your model changes..."
-        rows={4}
-        disabled={disabled}
-      />
-      <button type="submit" disabled={disabled || !prompt.trim()}>
-        Run Prompt
-      </button>
+    <form onSubmit={handleSubmit} className="prompt-composer">
+      <label className="prompt-input-shell">
+        <span>Describe edit</span>
+        <textarea
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          placeholder="Make the selected cushion darker green and soften the edges."
+          rows={5}
+          disabled={disabled}
+        />
+      </label>
+      <div className="prompt-actions">
+        <span className="prompt-hint">Applies to the current selection.</span>
+        <button type="submit" className="prompt-submit" disabled={disabled || !prompt.trim()}>
+          Run
+        </button>
+      </div>
     </form>
   );
 }
