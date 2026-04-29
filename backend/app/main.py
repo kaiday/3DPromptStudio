@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.components import router as components_router
+from app.api.export import router as export_router
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.api.operations import router as operations_router
@@ -16,6 +17,7 @@ def create_app() -> FastAPI:
     init_db()
     app.include_router(health_router, prefix="/api")
     app.include_router(components_router, prefix="/api")
+    app.include_router(export_router, prefix="/api")
     app.include_router(models_router, prefix="/api")
     app.include_router(operations_router, prefix="/api")
     app.include_router(prompts_router, prefix="/api")

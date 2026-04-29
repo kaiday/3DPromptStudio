@@ -69,6 +69,23 @@ def init_db() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS export_requests (
+              id TEXT PRIMARY KEY,
+              project_id TEXT NOT NULL,
+              model_id TEXT,
+              current_variant_id TEXT,
+              status TEXT NOT NULL,
+              mode TEXT NOT NULL,
+              options_json TEXT NOT NULL,
+              workspace_snapshot_json TEXT NOT NULL,
+              message TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_export_requests_project_id ON export_requests (project_id)")
         connection.commit()
 
 

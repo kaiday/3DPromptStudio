@@ -146,6 +146,7 @@ vite.config.ts.timestamp-*
 server/db/.data/
 
 # Python backend
+.data/
 __pycache__/
 *.py[cod]
 .pytest_cache/
