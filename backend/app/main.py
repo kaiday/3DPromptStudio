@@ -1,15 +1,18 @@
 from fastapi import FastAPI
 
 from app.api.health import router as health_router
+from app.api.workspace import router as workspace_router
 from app.core.config import get_settings
+from app.db.session import init_db
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name)
+    init_db()
     app.include_router(health_router, prefix="/api")
+    app.include_router(workspace_router, prefix="/api")
     return app
 
 
 app = create_app()
-
