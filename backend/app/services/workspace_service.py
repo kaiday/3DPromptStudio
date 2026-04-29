@@ -11,7 +11,7 @@ from app.schemas.workspace import (
 )
 
 
-def _save_workspace(db: sqlite3.Connection, workspace: Workspace) -> Workspace:
+def save_workspace(db: sqlite3.Connection, workspace: Workspace) -> Workspace:
     existing = db.execute(
         "SELECT created_at FROM workspaces WHERE project_id = ?",
         (workspace.project_id,),
@@ -70,13 +70,13 @@ def get_workspace(db: sqlite3.Connection, project_id: str) -> Workspace:
     ).fetchone()
     if not record:
         workspace = create_default_workspace(project_id)
-        return _save_workspace(db, workspace)
+        return save_workspace(db, workspace)
 
     try:
         return Workspace.model_validate(json.loads(record["workspace_state_json"]))
     except (json.JSONDecodeError, ValueError):
         workspace = create_default_workspace(project_id)
-        return _save_workspace(db, workspace)
+        return save_workspace(db, workspace)
 
 
 def update_workspace(db: sqlite3.Connection, project_id: str, patch: WorkspacePatch) -> Workspace:
@@ -101,7 +101,7 @@ def update_workspace(db: sqlite3.Connection, project_id: str, patch: WorkspacePa
     updated = Workspace.model_validate(next_data)
     updated.history.past = [*current.history.past, snapshot_workspace(current)][-50:]
     updated.history.future = []
-    return _save_workspace(db, updated)
+    return save_workspace(db, updated)
 
 
 def attach_model_to_workspace(db: sqlite3.Connection, project_id: str, model_id: str) -> Workspace:
@@ -113,7 +113,7 @@ def attach_model_to_workspace(db: sqlite3.Connection, project_id: str, model_id:
     updated = Workspace.model_validate(next_data)
     updated.history.past = [*current.history.past, snapshot_workspace(current)][-50:]
     updated.history.future = []
-    return _save_workspace(db, updated)
+    return save_workspace(db, updated)
 
 
 def undo_workspace(db: sqlite3.Connection, project_id: str) -> Workspace:
@@ -133,7 +133,7 @@ def undo_workspace(db: sqlite3.Connection, project_id: str) -> Workspace:
     }
     next_data["updated_at"] = now_iso()
 
-    return _save_workspace(db, Workspace.model_validate(next_data))
+    return save_workspace(db, Workspace.model_validate(next_data))
 
 
 def redo_workspace(db: sqlite3.Connection, project_id: str) -> Workspace:
@@ -153,4 +153,4 @@ def redo_workspace(db: sqlite3.Connection, project_id: str) -> Workspace:
     }
     next_data["updated_at"] = now_iso()
 
-    return _save_workspace(db, Workspace.model_validate(next_data))
+    return save_workspace(db, Workspace.model_validate(next_data))
