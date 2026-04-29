@@ -22,9 +22,18 @@ Expected response:
 {"status":"ok"}
 ```
 
+## Model Upload MVP
+
+```bash
+curl -F "file=@cat_wearing_hat.glb;type=model/gltf-binary" \
+  -F "source=upload" \
+  http://127.0.0.1:8000/api/projects/demo/models/upload
+```
+
+The upload response includes `fileUrl` and `metadataUrl` values that the frontend can use to load the GLB and inspect backend metadata.
+
 ## Tests
 
 ```bash
 python3 -m pytest
 ```
-

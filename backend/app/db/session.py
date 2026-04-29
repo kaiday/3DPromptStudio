@@ -43,11 +43,27 @@ def init_db() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS models (
+              id TEXT PRIMARY KEY,
+              project_id TEXT NOT NULL,
+              original_filename TEXT NOT NULL,
+              content_type TEXT NOT NULL,
+              size_bytes INTEGER NOT NULL,
+              source TEXT NOT NULL,
+              title TEXT,
+              storage_path TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_models_project_id ON models (project_id)")
         connection.commit()
 
 
 def get_db() -> Generator[sqlite3.Connection, None, None]:
-    db = sqlite3.connect(DATABASE_PATH)
+    db = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
     db.row_factory = sqlite3.Row
     try:
         yield db
