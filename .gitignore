@@ -141,3 +141,13 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Local backend persistence for no-env demos
+server/db/.data/
+
+# Python backend
+.data/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+backend/.data/

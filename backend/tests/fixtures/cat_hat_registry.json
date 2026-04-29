@@ -1,0 +1,40 @@
+{
+  "modelId": "model_cat_hat_demo",
+  "components": [
+    {
+      "id": "cat_body",
+      "name": "Cat body",
+      "meshName": "cat_body",
+      "editable": true,
+      "allowedOperations": ["setColor", "setMaterial", "setVisibility", "setScale"]
+    },
+    {
+      "id": "cat_head",
+      "name": "Cat head",
+      "meshName": "cat_head",
+      "editable": true,
+      "allowedOperations": ["setColor", "setMaterial", "setVisibility", "setScale"]
+    },
+    {
+      "id": "hat_top",
+      "name": "Top hat",
+      "meshName": "hat_top",
+      "editable": true,
+      "allowedOperations": ["setColor", "setMaterial", "setVisibility", "setPosition", "setScale", "setRotation"]
+    },
+    {
+      "id": "hat_red_band",
+      "name": "Hat red band",
+      "meshName": "hat_red_band",
+      "editable": true,
+      "allowedOperations": ["setColor", "setMaterial", "setVisibility"]
+    },
+    {
+      "id": "cat_left_eye_green",
+      "name": "Left green eye",
+      "meshName": "cat_left_eye_green",
+      "editable": true,
+      "allowedOperations": ["setColor", "setVisibility"]
+    }
+  ]
+}

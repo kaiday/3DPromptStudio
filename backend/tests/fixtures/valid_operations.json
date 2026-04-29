@@ -1,0 +1,22 @@
+{
+  "cases": [
+    {
+      "name": "set stop sign color",
+      "operation": {
+        "type": "setColor",
+        "target": { "componentId": "stop_sign_left" },
+        "payload": { "color": "#EF4444" }
+      },
+      "expect": { "ok": true }
+    },
+    {
+      "name": "hide road labels",
+      "operation": {
+        "type": "setVisibility",
+        "target": { "componentId": "road_labels" },
+        "payload": { "visible": false }
+      },
+      "expect": { "ok": true }
+    }
+  ]
+}

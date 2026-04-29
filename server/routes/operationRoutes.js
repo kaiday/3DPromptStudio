@@ -1,6 +1,4 @@
-import { generateStructuredOperations } from '../services/openaiEditService.js';
-import { buildPromptContext } from '../services/promptContextService.js';
-import { applyWorkspacePrompt, getWorkspace } from '../services/workspaceService.js';
+import { applyWorkspaceOperations } from '../services/workspaceService.js';
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
@@ -36,12 +34,12 @@ function parseJsonBody(request) {
   });
 }
 
-export function matchPromptRoute(pathname) {
-  const match = pathname.match(/^\/api\/projects\/([^/]+)\/prompt$/);
+export function matchOperationRoute(pathname) {
+  const match = pathname.match(/^\/api\/projects\/([^/]+)\/operations$/);
   return match ? { projectId: decodeURIComponent(match[1]) } : null;
 }
 
-export async function handlePromptRoute(request, response, { projectId }) {
+export async function handleOperationRoute(request, response, { projectId }) {
   try {
     if (request.method !== 'POST') {
       sendJson(response, 405, { error: 'Method not allowed.' });
@@ -49,21 +47,14 @@ export async function handlePromptRoute(request, response, { projectId }) {
     }
 
     const payload = await parseJsonBody(request);
-    const prompt = payload.prompt;
-    const workspace = await getWorkspace(projectId);
-    const promptContext = buildPromptContext(workspace);
-    const structuredResult = await generateStructuredOperations({
-      prompt,
-      scene: workspace.scene,
-      promptContext
+    const workspace = await applyWorkspaceOperations(projectId, payload.operations, {
+      source: payload.source ?? 'config',
+      label: payload.label
     });
-    const updatedWorkspace = await applyWorkspacePrompt(projectId, prompt, structuredResult.operations);
 
     sendJson(response, 200, {
-      workspace: updatedWorkspace,
-      operations: structuredResult.operations,
-      reasoning: structuredResult.reasoning,
-      promptContext
+      workspace,
+      operations: workspace.lastOperations
     });
     return true;
   } catch (error) {

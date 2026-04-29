@@ -1,0 +1,87 @@
+{
+  "modelId": "model_road_safety",
+  "components": [
+    {
+      "id": "road_main",
+      "name": "Main road",
+      "meshName": "Road_Main",
+      "editable": true,
+      "allowedOperations": ["setColor", "setMaterial", "setVisibility"],
+      "originalSnapshot": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "color": "#20242A",
+        "visible": true
+      }
+    },
+    {
+      "id": "stop_sign_left",
+      "name": "STOP sign",
+      "meshName": "StopSign_Left",
+      "editable": true,
+      "allowedOperations": ["setColor", "setVisibility", "setScale", "setPosition", "setRotation"],
+      "transformBounds": {
+        "position": { "min": [-10, -10, -10], "max": [10, 10, 10] },
+        "scale": { "min": [0.2, 0.2, 0.2], "max": [5, 5, 5] },
+        "rotation": { "min": [-3.14, -3.14, -3.14], "max": [3.14, 3.14, 3.14] }
+      },
+      "originalSnapshot": {
+        "position": [-2, 0, 1],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "color": "#E11D48",
+        "visible": true
+      }
+    },
+    {
+      "id": "school_zone_sign",
+      "name": "School zone sign",
+      "meshName": "SchoolZoneSign",
+      "editable": true,
+      "allowedOperations": ["setColor", "setVisibility", "setScale"],
+      "originalSnapshot": {
+        "position": [2, 0, 1],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "color": "#FACC15",
+        "visible": true
+      }
+    },
+    {
+      "id": "child_learner",
+      "name": "Child learner",
+      "meshName": "Child_Learner",
+      "editable": true,
+      "allowedOperations": ["setColor", "setVisibility", "setPosition", "setScale", "setRotation"],
+      "originalSnapshot": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "color": "#2563EB",
+        "visible": true
+      }
+    },
+    {
+      "id": "road_labels",
+      "name": "Road labels",
+      "meshName": "Road_Labels",
+      "editable": true,
+      "allowedOperations": ["setColor", "setVisibility"],
+      "originalSnapshot": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "color": "#111827",
+        "visible": true
+      }
+    },
+    {
+      "id": "camera_main",
+      "name": "Main camera",
+      "meshName": "Camera_Main",
+      "editable": false,
+      "allowedOperations": []
+    }
+  ]
+}

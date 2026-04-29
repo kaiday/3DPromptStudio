@@ -1,0 +1,38 @@
+{
+  "cases": [
+    {
+      "name": "stop sign red",
+      "registry": "road_safety_registry",
+      "prompt": "make the stop sign red",
+      "selectedComponentId": null,
+      "expect": {
+        "ok": true,
+        "type": "setColor",
+        "componentId": "stop_sign_left",
+        "payload": { "color": "#EF4444" }
+      }
+    },
+    {
+      "name": "selected bigger",
+      "registry": "road_safety_registry",
+      "prompt": "make this bigger",
+      "selectedComponentId": "stop_sign_left",
+      "expect": {
+        "ok": true,
+        "type": "setScale",
+        "componentId": "stop_sign_left",
+        "payload": { "scale": [1.25, 1.25, 1.25], "mode": "multiply" }
+      }
+    },
+    {
+      "name": "structural add bus",
+      "registry": "road_safety_registry",
+      "prompt": "add a new school bus",
+      "selectedComponentId": null,
+      "expect": {
+        "ok": false,
+        "code": "STRUCTURAL_EDIT_REQUIRES_GENERATION"
+      }
+    }
+  ]
+}

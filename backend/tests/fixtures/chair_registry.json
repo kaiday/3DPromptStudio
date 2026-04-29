@@ -1,0 +1,26 @@
+{
+  "modelId": "model_chair_demo",
+  "components": [
+    {
+      "id": "chair_seat",
+      "name": "Chair cushion",
+      "meshName": "Chair_Seat",
+      "editable": true,
+      "allowedOperations": ["setColor", "setMaterial", "setVisibility", "setScale"]
+    },
+    {
+      "id": "chair_back",
+      "name": "Chair back",
+      "meshName": "Chair_Back",
+      "editable": true,
+      "allowedOperations": ["setColor", "setMaterial", "setVisibility", "setScale", "setRotation"]
+    },
+    {
+      "id": "chair_legs",
+      "name": "Chair legs",
+      "meshName": "Chair_Legs",
+      "editable": true,
+      "allowedOperations": ["setColor", "setMaterial", "setVisibility"]
+    }
+  ]
+}
