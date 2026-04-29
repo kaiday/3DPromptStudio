@@ -9,13 +9,13 @@ This is the active backend. The repository's `server/` folder is legacy JavaScri
 From this `backend/` folder:
 
 ```bash
-python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8018
 ```
 
 Health check:
 
 ```bash
-curl http://127.0.0.1:8000/api/health
+curl http://127.0.0.1:8018/api/health
 ```
 
 Expected response:
@@ -29,7 +29,7 @@ Expected response:
 ```bash
 curl -F "file=@cat_wearing_hat.glb;type=model/gltf-binary" \
   -F "source=upload" \
-  http://127.0.0.1:8000/api/projects/demo/models/upload
+  http://127.0.0.1:8018/api/projects/demo/models/upload
 ```
 
 The upload response includes `fileUrl` and `metadataUrl` values that the frontend can use to load the GLB and inspect backend metadata.
