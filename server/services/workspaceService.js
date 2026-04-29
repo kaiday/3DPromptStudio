@@ -139,6 +139,38 @@ export async function applyWorkspacePrompt(projectId, prompt, operations) {
   });
 }
 
+export async function applyWorkspaceOperations(projectId, operations, options = {}) {
+  const currentWorkspace = await getWorkspace(projectId);
+  const componentRegistry = getComponentRegistry(projectId);
+  const updatedScene = applyEditOperations(currentWorkspace.scene, operations, {
+    components: componentRegistry.components
+  });
+  const createdAt = nowIso();
+  const variantId = `variant_${Date.now()}`;
+  const source = options.source ?? 'config';
+
+  return saveWorkspace({
+    ...currentWorkspace,
+    scene: updatedScene,
+    currentVariantId: variantId,
+    lastOperations: operations.map((operation) => ({
+      ...operation,
+      source,
+      timestamp: createdAt
+    })),
+    hasUnsavedOperations: true,
+    variantHistory: [
+      ...currentWorkspace.variantHistory,
+      { id: variantId, label: options.label ?? `Manual edit ${currentWorkspace.variantHistory.length + 1}`, createdAt }
+    ].slice(-50),
+    history: {
+      past: [...currentWorkspace.history.past, snapshotWorkspace(currentWorkspace)].slice(-50),
+      future: []
+    },
+    updatedAt: createdAt
+  });
+}
+
 export async function undoWorkspace(projectId) {
   const currentWorkspace = await getWorkspace(projectId);
   if (!currentWorkspace.history.past.length) {
