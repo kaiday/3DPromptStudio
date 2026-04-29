@@ -104,6 +104,18 @@ def update_workspace(db: sqlite3.Connection, project_id: str, patch: WorkspacePa
     return _save_workspace(db, updated)
 
 
+def attach_model_to_workspace(db: sqlite3.Connection, project_id: str, model_id: str) -> Workspace:
+    current = get_workspace(db, project_id)
+    next_data = current.model_dump()
+    next_data["model_id"] = model_id
+    next_data["updated_at"] = now_iso()
+
+    updated = Workspace.model_validate(next_data)
+    updated.history.past = [*current.history.past, snapshot_workspace(current)][-50:]
+    updated.history.future = []
+    return _save_workspace(db, updated)
+
+
 def undo_workspace(db: sqlite3.Connection, project_id: str) -> Workspace:
     current = get_workspace(db, project_id)
     if not current.history.past:

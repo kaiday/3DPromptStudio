@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 
 from app.db.session import get_db
 from app.services.model_service import create_model, get_model_file, get_model_metadata, parse_multipart_upload
+from app.services.workspace_service import attach_model_to_workspace
 
 router = APIRouter(tags=["models"])
 
@@ -13,6 +14,7 @@ router = APIRouter(tags=["models"])
 async def upload_model(project_id: str, request: Request, db: sqlite3.Connection = Depends(get_db)):
     filename, content, content_type, source, title = await parse_multipart_upload(request)
     model = create_model(db, project_id, filename, content, content_type, source, title)
+    attach_model_to_workspace(db, project_id, model.id)
     return {"model": model.model_dump(by_alias=True)}
 
 

@@ -45,6 +45,26 @@ def test_glb_upload_metadata_and_file_serving():
     assert response.content == glb_content
 
 
+def test_model_upload_links_model_to_workspace():
+    client = TestClient(app)
+    project_id = unique_project_id()
+    glb_content = b"glTF" + b"\x02\x00\x00\x00" + b"workspace-link"
+
+    response = client.post(
+        f"/api/projects/{project_id}/models/upload",
+        files={"file": ("linked_model.glb", glb_content, "model/gltf-binary")},
+        data={"source": "upload"},
+    )
+    assert response.status_code == 200
+    model = response.json()["model"]
+
+    response = client.get(f"/api/projects/{project_id}/workspace")
+    assert response.status_code == 200
+    workspace = response.json()["workspace"]
+    assert workspace["modelId"] == model["id"]
+    assert workspace["history"]["past"]
+
+
 def test_model_upload_rejects_non_glb_file():
     client = TestClient(app)
     project_id = unique_project_id()
