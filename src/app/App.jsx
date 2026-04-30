@@ -32,6 +32,7 @@ const TOOL_OPTIONS = [
   { id: 'zoom-in', label: 'Zoom in', shortcut: '+', icon: 'zoomIn' },
   { id: 'zoom-out', label: 'Zoom out', shortcut: '-', icon: 'zoomOut' }
 ];
+const WORKSPACE_MODES = new Set(['edit', 'maker', 'play']);
 
 function getInitialTheme() {
   if (typeof window === 'undefined') return 'dark';
@@ -54,6 +55,10 @@ function toBackendTool(tool) {
   const normalizedTool = normalizeTool(tool);
   if (normalizedTool === 'zoom-in' || normalizedTool === 'zoom-out') return 'zoom';
   return normalizedTool;
+}
+
+function normalizeWorkspaceMode(mode) {
+  return WORKSPACE_MODES.has(mode) ? mode : 'edit';
 }
 
 function isTypingTarget(target) {
@@ -929,7 +934,13 @@ export default function App() {
   );
 
   const activeWorkspace = useMemo(
-    () => (localModel ? { ...sceneStore.workspace, model: localModel } : sceneStore.workspace),
+    () => {
+      if (!sceneStore.workspace) return sceneStore.workspace;
+      const workspaceMode = normalizeWorkspaceMode(sceneStore.workspace.workspaceMode);
+      return localModel
+        ? { ...sceneStore.workspace, workspaceMode, model: localModel }
+        : { ...sceneStore.workspace, workspaceMode };
+    },
     [localModel, sceneStore.workspace]
   );
 
@@ -1420,6 +1431,15 @@ export default function App() {
     try {
       setError('');
       await persistWorkspacePatch({ selectedTool: toBackendTool(tool) });
+    } catch (saveError) {
+      setError(saveError.message);
+    }
+  }
+
+  async function handleWorkspaceModeChange(mode) {
+    try {
+      setError('');
+      await persistWorkspacePatch({ workspaceMode: normalizeWorkspaceMode(mode) });
     } catch (saveError) {
       setError(saveError.message);
     }

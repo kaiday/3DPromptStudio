@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 WorkspaceTool = Literal["mouse", "annotation", "line", "cut", "zoom"]
 RightPanelMode = Literal["config", "prompt"]
+WorkspaceMode = Literal["edit", "maker", "play"]
 
 MAX_HISTORY_ITEMS = 50
 DEFAULT_CAMERA_POSITION = [3.0, 2.2, 4.0]
@@ -74,6 +75,7 @@ class WorkspaceSnapshot(CamelModel):
     scene: SceneState = Field(default_factory=SceneState)
     selected_part_id: str | None = Field(default=None, alias="selectedPartId")
     selected_tool: WorkspaceTool = Field(default="mouse", alias="selectedTool")
+    workspace_mode: WorkspaceMode = Field(default="edit", alias="workspaceMode")
     right_panel_mode: RightPanelMode = Field(default="config", alias="rightPanelMode")
     current_variant_id: str | None = Field(default=None, alias="currentVariantId")
     last_operations: list[WorkspaceOperation] = Field(default_factory=list, alias="lastOperations")
@@ -98,6 +100,7 @@ class Workspace(CamelModel):
     current_variant_id: str | None = Field(default=None, alias="currentVariantId")
     selected_tool: WorkspaceTool = Field(default="mouse", alias="selectedTool")
     selected_part_id: str | None = Field(default=None, alias="selectedPartId")
+    workspace_mode: WorkspaceMode = Field(default="edit", alias="workspaceMode")
     right_panel_mode: RightPanelMode = Field(default="config", alias="rightPanelMode")
     viewport: ViewportState = Field(default_factory=ViewportState)
     scene: SceneState = Field(default_factory=SceneState)
@@ -130,6 +133,7 @@ class WorkspacePatch(CamelModel):
     current_variant_id: str | None = Field(default=None, alias="currentVariantId")
     selected_tool: WorkspaceTool | None = Field(default=None, alias="selectedTool")
     selected_part_id: str | None = Field(default=None, alias="selectedPartId")
+    workspace_mode: WorkspaceMode | None = Field(default=None, alias="workspaceMode")
     right_panel_mode: RightPanelMode | None = Field(default=None, alias="rightPanelMode")
     viewport: ViewportPatch | None = None
     scene: SceneState | None = None
@@ -149,6 +153,7 @@ def snapshot_workspace(workspace: Workspace) -> WorkspaceSnapshot:
         scene=workspace.scene,
         selectedPartId=workspace.selected_part_id,
         selectedTool=workspace.selected_tool,
+        workspaceMode=workspace.workspace_mode,
         rightPanelMode=workspace.right_panel_mode,
         currentVariantId=workspace.current_variant_id,
         lastOperations=workspace.last_operations,
