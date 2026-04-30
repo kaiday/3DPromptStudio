@@ -1,4 +1,43 @@
-export function PartInspector({ selectedPart, onPartChange, onPartRemove }) {
+import { GeneratedAssetInspector } from './GeneratedAssetInspector.jsx';
+
+function getGeneratedMetadata(part) {
+  return part?.generatedMetadata ?? part?.generationMetadata ?? part?.metadata ?? {};
+}
+
+function isGeneratedPart(part) {
+  if (!part) return false;
+  const metadata = getGeneratedMetadata(part);
+  return Boolean(
+    part.source === 'generated' ||
+      part.source === 'generated-asset' ||
+      part.kind === 'generated' ||
+      part.type === 'generated' ||
+      part.assetId ||
+      part.generationJobId ||
+      part.generationStatus ||
+      part.modelUrl ||
+      part.glbUrl ||
+      part.glb_url ||
+      metadata.generated === true ||
+      metadata.assetId ||
+      metadata.jobId ||
+      metadata.prompt
+  );
+}
+
+export function PartInspector({
+  selectedPart,
+  onPartChange,
+  onPartRemove,
+  generatedInteractions = [],
+  onGeneratedInteractionsChange,
+  onGeneratedInteractionsSave,
+  generatedInteractionsSaving = false,
+  generatedInteractionsError = '',
+  generatedInspectorReadOnly = false,
+  onGeneratedAssetDelete,
+  onGeneratedAssetHide
+}) {
   const material = selectedPart?.material ?? {};
   const color = material.color ?? '#cccccc';
   const materialType = material.type ?? 'standard';
@@ -10,6 +49,23 @@ export function PartInspector({ selectedPart, onPartChange, onPartRemove }) {
 
   function formatVector(vector) {
     return vector.map((value) => Number(value).toFixed(2)).join(', ');
+  }
+
+  if (isGeneratedPart(selectedPart)) {
+    return (
+      <GeneratedAssetInspector
+        asset={selectedPart}
+        interactions={generatedInteractions}
+        onAssetChange={onPartChange}
+        onInteractionsChange={onGeneratedInteractionsChange}
+        onSaveInteractions={onGeneratedInteractionsSave}
+        onDelete={onGeneratedAssetDelete ?? onPartRemove}
+        onHide={onGeneratedAssetHide ?? ((partId) => onPartChange?.(partId, { visible: false }))}
+        readOnly={generatedInspectorReadOnly}
+        savingInteractions={generatedInteractionsSaving}
+        interactionError={generatedInteractionsError}
+      />
+    );
   }
 
   return (
