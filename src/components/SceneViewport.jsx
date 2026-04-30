@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { loadGlbModel } from '../three/loadGlbModel.js';
 import { buildPartRegistryFromObject } from '../three/partRegistry.js';
+import { createPendingPlaceholder, disposePendingPlaceholder, updatePendingPlaceholder } from '../three/pendingPlaceholder.js';
 
 function formatVector(vector = []) {
   return vector.map((value) => Number(value).toFixed(2)).join(', ');
@@ -334,12 +335,22 @@ function disposeObject(object) {
   });
 }
 
+function getPendingPlaceholderId(placeholder, index) {
+  return placeholder?.id ?? placeholder?.jobId ?? placeholder?.job_id ?? `pending_generation_${index + 1}`;
+}
+
+function isPendingPlaceholderActive(placeholder) {
+  const status = placeholder?.status ?? 'queued';
+  return status === 'queued' || status === 'running';
+}
+
 function ThreeViewport({
   selectedPartId,
   selectedTool,
   modelUrl,
   metadataParts,
   sceneObjects,
+  pendingPlaceholders,
   partOverrides,
   cameraStateRef,
   resetViewToken,
@@ -357,7 +368,13 @@ function ThreeViewport({
     const mount = mountRef.current;
     if (!mount) return undefined;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      onStatusChange('error');
+      return undefined;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = true;
@@ -394,6 +411,8 @@ function ThreeViewport({
     let disposed = false;
     let activeModel = null;
     let activeSceneObjects = null;
+    let activePendingPlaceholders = null;
+    let pendingPlaceholderGroups = [];
     let selectableMeshes = [];
     let outline = null;
     let previewObject = null;
@@ -416,10 +435,17 @@ function ThreeViewport({
         scene.remove(activeSceneObjects);
         disposeObject(activeSceneObjects);
       }
+      if (activePendingPlaceholders) {
+        scene.remove(activePendingPlaceholders);
+        pendingPlaceholderGroups.forEach(disposePendingPlaceholder);
+      }
       activeModel = model;
       activeSceneObjects = new THREE.Group();
       activeSceneObjects.name = 'Scene edit objects';
+      activePendingPlaceholders = new THREE.Group();
+      activePendingPlaceholders.name = 'Pending generation placeholders';
       const objectMeshes = [];
+      const pendingMeshes = [];
       sceneObjects.forEach((sceneObject) => {
         const override = partOverrides?.[sceneObject.id] ?? {};
         const objectMesh = createSceneObjectMesh(
@@ -438,10 +464,24 @@ function ThreeViewport({
         });
         activeSceneObjects.add(objectMesh);
       });
-      selectableMeshes = [...nextSelectableMeshes, ...objectMeshes];
+      pendingPlaceholderGroups = pendingPlaceholders.filter(isPendingPlaceholderActive).map((placeholder, index) => {
+        const placeholderGroup = createPendingPlaceholder({
+          id: getPendingPlaceholderId(placeholder, index),
+          color: placeholder.color,
+          position: placeholder.position,
+          scale: placeholder.scale
+        });
+        placeholderGroup.traverse((child) => {
+          if (child.isMesh && child.userData.partId) pendingMeshes.push(child);
+        });
+        activePendingPlaceholders.add(placeholderGroup);
+        return placeholderGroup;
+      });
+      selectableMeshes = [...nextSelectableMeshes, ...objectMeshes, ...pendingMeshes];
       applyPartOverrides(selectableMeshes, partOverrides);
       scene.add(activeModel);
       scene.add(activeSceneObjects);
+      scene.add(activePendingPlaceholders);
     }
 
     function mountPlaceholder({ reportRegistry = false } = {}) {
@@ -709,7 +749,9 @@ function ThreeViewport({
     }
 
     let frameId = 0;
+    const clock = new THREE.Clock();
     function render() {
+      const elapsedSeconds = clock.getElapsedTime();
       if (resetViewVersion !== resetViewToken) {
         resetViewVersion = resetViewToken;
         handleDoubleClick();
@@ -718,6 +760,7 @@ function ThreeViewport({
         fitViewVersion = fitViewToken;
         fitView();
       }
+      pendingPlaceholderGroups.forEach((placeholderGroup) => updatePendingPlaceholder(placeholderGroup, elapsedSeconds));
       renderer.render(scene, camera);
       frameId = window.requestAnimationFrame(render);
     }
@@ -764,6 +807,7 @@ function ThreeViewport({
   }, [
     fallbackPartId,
     metadataParts,
+    pendingPlaceholders,
     partOverrides,
     cameraStateRef,
     resetViewToken,
@@ -789,6 +833,7 @@ export function SceneViewport({
   selectedPartId,
   selectedTool = 'mouse',
   sceneObjects = [],
+  pendingPlaceholders = [],
   partOverrides = {},
   onSelectPart,
   onCreateSceneObject,
@@ -808,7 +853,8 @@ export function SceneViewport({
     () => scene.metadata?.parts ?? model?.parts ?? model?.metadata?.parts ?? [],
     [model?.metadata?.parts, model?.parts, scene.metadata?.parts]
   );
-  const hasRenderableScene = scene.components.length > 0 || Boolean(modelUrl);
+  const hasPendingPlaceholders = pendingPlaceholders.some(isPendingPlaceholderActive);
+  const hasRenderableScene = scene.components.length > 0 || Boolean(modelUrl) || hasPendingPlaceholders;
 
   useEffect(() => {
     setDraftFeedback('');
@@ -841,6 +887,7 @@ export function SceneViewport({
               modelUrl={modelUrl}
               metadataParts={metadataParts}
               sceneObjects={sceneObjects}
+              pendingPlaceholders={pendingPlaceholders}
               partOverrides={partOverrides}
               cameraStateRef={cameraStateRef}
               resetViewToken={resetViewToken}

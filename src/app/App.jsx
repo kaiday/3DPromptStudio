@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import { saveComponentRegistry } from '../api/componentApi.js';
 import { submitEditOperations } from '../api/editOperationsApi.js';
+import { cancelGenerationJob, createGenerationJob } from '../api/generationApi.js';
+import { subscribeToGenerationJob } from '../api/generationEvents.js';
+import { createMockGenerationJob, isMockGenerationEnabled, subscribeToMockGenerationJob } from '../api/generationMock.js';
 import { uploadModel } from '../api/modelApi.js';
 import { submitPrompt } from '../api/promptApi.js';
 import { fetchWorkspace, patchWorkspace, redoWorkspace, undoWorkspace } from '../api/projectApi.js';
 import { ErrorBanner } from '../components/ErrorBanner.jsx';
+import { GenerationQueue } from '../components/GenerationQueue.jsx';
 import { LoadingOverlay } from '../components/LoadingOverlay.jsx';
 import { PartInspector } from '../components/PartInspector.jsx';
 import { PromptComposer } from '../components/PromptComposer.jsx';
@@ -12,6 +16,7 @@ import { PromptHistory } from '../components/PromptHistory.jsx';
 import { SceneViewport } from '../components/SceneViewport.jsx';
 import { VariantHistory } from '../components/VariantHistory.jsx';
 import { useHistoryStore } from '../state/historyStore.js';
+import { useGenerationStore } from '../state/generationStore.js';
 import { useSceneStore } from '../state/sceneStore.js';
 import { useSelectionStore } from '../state/selectionStore.js';
 import { mergePartRegistries } from '../three/partRegistry.js';
@@ -187,6 +192,68 @@ function createOperationRecord(operation, label) {
     createdAt: now.toISOString(),
     label,
     ...operation
+  };
+}
+
+function isCreationPrompt(prompt) {
+  const normalizedPrompt = prompt.trim().toLowerCase();
+  return (
+    /^(create|spawn|generate|build|design)\b/.test(normalizedPrompt) ||
+    /^make\s+(a|an|new)\b/.test(normalizedPrompt) ||
+    /^add\s+(a|an|new)\b/.test(normalizedPrompt)
+  );
+}
+
+function createGenerationPayload(prompt, workspace, selectedComponentId, source = 'prompt') {
+  return {
+    prompt,
+    source,
+    sceneId: workspace?.workspaceId ?? PROJECT_ID,
+    selectedComponentId,
+    placement: {
+      position: [0, 0, 0]
+    }
+  };
+}
+
+function getGeneratedModelUrl(payload = {}) {
+  return payload.modelUrl ?? payload.model_url ?? payload.fileUrl ?? payload.file_url ?? payload.assetUrl ?? payload.asset_url ?? null;
+}
+
+function getGeneratedAssetId(payload = {}) {
+  return payload.assetId ?? payload.asset_id ?? payload.modelId ?? payload.model_id ?? null;
+}
+
+function getGeneratedMetadataParts(payload = {}) {
+  return payload.parts ?? payload.metadata?.parts ?? payload.sceneMetadata?.parts ?? [];
+}
+
+function createGeneratedModelFromEvent(job, event) {
+  const payload = event?.payload ?? {};
+  const modelUrl = getGeneratedModelUrl(payload);
+  const assetId = getGeneratedAssetId(payload);
+  if (!modelUrl && !assetId) return null;
+
+  const url = modelUrl ?? `/api/assets/${encodeURIComponent(assetId)}`;
+  const filename = payload.filename ?? payload.fileName ?? payload.originalFilename ?? `generated-${job.id}.glb`;
+  return {
+    id: assetId ?? job.id,
+    url,
+    fileUrl: url,
+    originalFilename: filename,
+    filename,
+    mimeType: payload.mimeType ?? payload.contentType ?? 'model/gltf-binary',
+    size: payload.size ?? payload.sizeBytes ?? null,
+    importedAt: new Date().toISOString(),
+    generatedAt: new Date().toISOString(),
+    source: 'generation',
+    generationJobId: job.id,
+    isObjectUrl: false,
+    parts: getGeneratedMetadataParts(payload),
+    metadata: {
+      ...(payload.metadata ?? {}),
+      parts: getGeneratedMetadataParts(payload)
+    }
   };
 }
 
@@ -445,6 +512,9 @@ function InspectorPanel({
   submissionHistory,
   promptHistory,
   variantHistory,
+  generationActiveJobs,
+  generationRecentJobs,
+  generationMessagesByJobId,
   isPrompting,
   onPanelModeChange,
   onPartChange,
@@ -452,6 +522,8 @@ function InspectorPanel({
   onClearSubmitted,
   onOperationSubmit,
   onPromptSubmit,
+  onGenerationCancel,
+  onGenerationClearCompleted,
   onCollapse
 }) {
   return (
@@ -486,6 +558,13 @@ function InspectorPanel({
         {activeRightPanel === 'prompt' ? (
           <>
             <PromptComposer onSubmit={onPromptSubmit} disabled={isPrompting} />
+            <GenerationQueue
+              activeJobs={generationActiveJobs}
+              recentJobs={generationRecentJobs}
+              messagesByJobId={generationMessagesByJobId}
+              onCancelJob={onGenerationCancel}
+              onClearCompleted={onGenerationClearCompleted}
+            />
             <PromptHistory prompts={promptHistory} />
             <VariantHistory variants={variantHistory} />
           </>
@@ -615,6 +694,8 @@ export default function App() {
   const sceneStore = useSceneStore();
   const selectionStore = useSelectionStore();
   const historyStore = useHistoryStore(sceneStore.workspace);
+  const generationStore = useGenerationStore();
+  const generationUnsubscribersRef = useRef(new Map());
   const [theme, setTheme] = useState(getInitialTheme);
   const [isLoading, setIsLoading] = useState(true);
   const [isPrompting, setIsPrompting] = useState(false);
@@ -655,6 +736,14 @@ export default function App() {
       if (localModel?.isObjectUrl) URL.revokeObjectURL(localModel.url);
     },
     [localModel]
+  );
+
+  useEffect(
+    () => () => {
+      generationUnsubscribersRef.current.forEach((unsubscribe) => unsubscribe());
+      generationUnsubscribersRef.current.clear();
+    },
+    []
   );
 
   useEffect(() => {
@@ -1164,16 +1253,85 @@ export default function App() {
     }
   }
 
+  function subscribeToGenerationUpdates(job, provider) {
+    if (!job?.id || generationUnsubscribersRef.current.has(job.id)) return;
+
+    const handlers = {
+      onEvent: (event) => {
+        generationStore.appendEvent(job.id, event);
+        const status = event?.payload?.status;
+        const eventType = event?.type ?? event?.payload?.type;
+        if (status === 'succeeded' || eventType === 'job_succeeded') {
+          const generatedModel = createGeneratedModelFromEvent(job, event);
+          if (generatedModel) {
+            setLocalModel((previousModel) => {
+              if (previousModel?.isObjectUrl) URL.revokeObjectURL(previousModel.url);
+              return generatedModel;
+            });
+            setRuntimeParts([]);
+            setImportedModelState({ status: 'loading', meshCount: 0 });
+            selectionStore.setSelectedPartId(null);
+          }
+        }
+        if (['succeeded', 'failed', 'canceled'].includes(status) || ['job_succeeded', 'job_failed', 'job_canceled'].includes(eventType)) {
+          const unsubscribe = generationUnsubscribersRef.current.get(job.id);
+          if (unsubscribe) {
+            unsubscribe();
+            generationUnsubscribersRef.current.delete(job.id);
+          }
+        }
+      },
+      onError: (streamError) => {
+        generationStore.markFailed(job.id, streamError);
+        const unsubscribe = generationUnsubscribersRef.current.get(job.id);
+        if (unsubscribe) {
+          unsubscribe();
+          generationUnsubscribersRef.current.delete(job.id);
+        }
+      }
+    };
+
+    const unsubscribe =
+      provider === 'mock'
+        ? subscribeToMockGenerationJob(job, handlers)
+        : subscribeToGenerationJob(PROJECT_ID, job.id, handlers);
+    generationUnsubscribersRef.current.set(job.id, unsubscribe);
+  }
+
+  async function startGenerationJob(prompt, source = 'prompt') {
+    const generationPayload = createGenerationPayload(prompt, sceneStore.workspace, selectionStore.selectedPartId, source);
+    let jobPayload;
+    try {
+      jobPayload = await createGenerationJob(PROJECT_ID, generationPayload);
+    } catch (generationError) {
+      if (!isMockGenerationEnabled()) throw generationError;
+      jobPayload = createMockGenerationJob(PROJECT_ID, generationPayload);
+    }
+
+    const job = jobPayload.job;
+    generationStore.addJob(job);
+    subscribeToGenerationUpdates(job, job.provider);
+    return job;
+  }
+
   async function handlePromptSubmit(prompt) {
     try {
       setError('');
       setIsPrompting(true);
+      if (isCreationPrompt(prompt)) {
+        await startGenerationJob(prompt, 'direct_creation_prompt');
+        return;
+      }
+
       const payload = await submitPrompt(PROJECT_ID, prompt, {
         mode: 'apply',
         sceneId: sceneStore.workspace?.workspaceId ?? PROJECT_ID,
         selectedComponentId: selectionStore.selectedPartId,
         baseRevisionId: sceneStore.workspace?.currentVariantId ?? null
       });
+      if (payload.requiresGeneration) {
+        await startGenerationJob(prompt, 'prompt_interpreter');
+      }
       if (payload.workspace) {
         sceneStore.setWorkspace(payload.workspace);
       }
@@ -1181,6 +1339,29 @@ export default function App() {
       setError(promptError.message);
     } finally {
       setIsPrompting(false);
+    }
+  }
+
+  async function handleGenerationCancel(jobId) {
+    const unsubscribe = generationUnsubscribersRef.current.get(jobId);
+    if (unsubscribe) {
+      unsubscribe();
+      generationUnsubscribersRef.current.delete(jobId);
+    }
+
+    try {
+      const job = generationStore.jobsById[jobId];
+      if (job?.provider !== 'mock') {
+        const payload = await cancelGenerationJob(PROJECT_ID, jobId);
+        if (payload.job) {
+          generationStore.updateJob(jobId, payload.job);
+          return;
+        }
+      }
+      generationStore.markCanceled(jobId);
+    } catch (cancelError) {
+      setError(cancelError.message);
+      generationStore.markFailed(jobId, cancelError);
     }
   }
 
@@ -1264,6 +1445,7 @@ export default function App() {
             selectedPartId={selectionStore.selectedPartId}
             selectedTool={normalizeTool(sceneStore.workspace?.selectedTool)}
             sceneObjects={sceneObjects}
+            pendingPlaceholders={generationStore.placeholders}
             partOverrides={partOverrides}
             onSelectPart={handlePartSelect}
             onCreateSceneObject={handleCreateSceneObject}
@@ -1291,6 +1473,9 @@ export default function App() {
             submissionHistory={submissionHistory}
             promptHistory={historyStore.promptHistory}
             variantHistory={historyStore.variantHistory}
+            generationActiveJobs={generationStore.activeJobs}
+            generationRecentJobs={generationStore.recentJobs}
+            generationMessagesByJobId={generationStore.messagesByJobId}
             isPrompting={isPrompting}
             onPanelModeChange={handlePanelModeChange}
             onPartChange={handlePartChange}
@@ -1298,6 +1483,8 @@ export default function App() {
             onClearSubmitted={handleClearSubmitted}
             onOperationSubmit={handleOperationSubmit}
             onPromptSubmit={handlePromptSubmit}
+            onGenerationCancel={handleGenerationCancel}
+            onGenerationClearCompleted={generationStore.clearCompleted}
             onCollapse={() => setIsRightPanelOpen(false)}
           />
         ) : (
