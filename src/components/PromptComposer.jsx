@@ -14,17 +14,17 @@ export function PromptComposer({ onSubmit, disabled = false }) {
   return (
     <form onSubmit={handleSubmit} className="prompt-composer">
       <label className="prompt-input-shell">
-        <span>Describe edit</span>
+        <span>Describe edit or creation</span>
         <textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
-          placeholder="Make the selected cushion darker green and soften the edges."
+          placeholder="Make the selected cushion darker green, or create a road safety scene."
           rows={5}
           disabled={disabled}
         />
       </label>
       <div className="prompt-actions">
-        <span className="prompt-hint">Applies to the current selection.</span>
+        <span className="prompt-hint">Edits selection or starts generation.</span>
         <button type="submit" className="prompt-submit" disabled={disabled || !prompt.trim()}>
           Run
         </button>

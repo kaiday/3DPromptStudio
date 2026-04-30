@@ -1986,6 +1986,189 @@ button:disabled {
   white-space: nowrap;
 }
 
+.generation-queue {
+  gap: 12px;
+}
+
+.generation-clear-button {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.generation-group {
+  display: grid;
+  gap: 7px;
+}
+
+.generation-group-label {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.generation-list {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.generation-item {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.generation-item-running {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line-soft));
+}
+
+.generation-item-queued {
+  border-color: color-mix(in srgb, var(--muted) 24%, var(--line-soft));
+}
+
+.generation-item-succeeded {
+  border-color: color-mix(in srgb, var(--success) 30%, var(--line-soft));
+}
+
+.generation-item-failed {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line-soft));
+  background: color-mix(in srgb, var(--surface) 92%, var(--danger) 5%);
+}
+
+.generation-item-canceled {
+  opacity: 0.78;
+}
+
+.generation-item-header {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.generation-item-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.generation-item-title strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-item-title span,
+.generation-message,
+.generation-event-list li {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.generation-status {
+  min-height: 20px;
+  max-width: 76px;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-status-running {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--accent);
+}
+
+.generation-status-succeeded {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--line));
+  color: var(--success);
+}
+
+.generation-status-failed {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+  color: var(--danger);
+}
+
+.generation-status-canceled {
+  color: var(--faint);
+}
+
+.generation-progress-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.generation-progress-track span {
+  display: block;
+  width: var(--generation-progress, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.generation-message {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.generation-error {
+  margin: 0;
+  padding: 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--danger) 32%, var(--line-soft));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 86%, var(--danger) 8%);
+  color: var(--danger);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.generation-event-list {
+  display: grid;
+  gap: 3px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.generation-event-list li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-cancel-button {
+  justify-self: start;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
 .quiet-button {
   min-height: 28px;
   padding: 0 10px;
