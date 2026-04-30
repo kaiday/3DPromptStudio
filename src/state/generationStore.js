@@ -54,11 +54,13 @@ function normalizeError(error) {
 function createPlaceholder(job) {
   const id = getJobId(job);
   if (!id) return null;
+  const placementPosition = job?.placement?.position;
   return {
     id: `placeholder_${id}`,
     jobId: id,
     label: job?.prompt ? `Generating: ${job.prompt}` : 'Generating scene',
     status: job?.status ?? 'queued',
+    ...(Array.isArray(placementPosition) ? { position: placementPosition } : {}),
     createdAt: job?.createdAt ?? job?.created_at ?? new Date().toISOString()
   };
 }

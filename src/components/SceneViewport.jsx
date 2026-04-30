@@ -4,8 +4,24 @@ import { loadGlbModel } from '../three/loadGlbModel.js';
 import { buildPartRegistryFromObject } from '../three/partRegistry.js';
 import { createPendingPlaceholder, disposePendingPlaceholder, updatePendingPlaceholder } from '../three/pendingPlaceholder.js';
 
+const WORKSPACE_MODES = new Set(['edit', 'maker', 'play']);
+const PLAY_INTERACTION_DISTANCE = 3.5;
+
 function formatVector(vector = []) {
   return vector.map((value) => Number(value).toFixed(2)).join(', ');
+}
+
+function normalizeWorkspaceMode(mode) {
+  return WORKSPACE_MODES.has(mode) ? mode : 'edit';
+}
+
+function getModeLabel(mode) {
+  const labels = {
+    edit: 'Edit',
+    maker: 'Maker',
+    play: 'Play'
+  };
+  return labels[mode] ?? labels.edit;
 }
 
 function getToolLabel(tool) {
@@ -248,6 +264,15 @@ function buildHitPayload(hit) {
   };
 }
 
+function createPlacementPayload({ point, normal = new THREE.Vector3(0, 1, 0), source = 'surface', partId = null }) {
+  return {
+    position: point.toArray(),
+    normal: normal.toArray(),
+    source,
+    ...(partId ? { partId } : {})
+  };
+}
+
 function getPointerWorldPoint(event, renderer, pointer, raycaster, camera, plane) {
   const bounds = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
@@ -255,6 +280,41 @@ function getPointerWorldPoint(event, renderer, pointer, raycaster, camera, plane
   raycaster.setFromCamera(pointer, camera);
   const point = new THREE.Vector3();
   return raycaster.ray.intersectPlane(plane, point) ? point : null;
+}
+
+function getCameraFallbackPlacement(camera) {
+  const direction = new THREE.Vector3();
+  camera.getWorldDirection(direction);
+  const point = camera.position.clone().addScaledVector(direction, 5);
+  return createPlacementPayload({ point, source: 'camera' });
+}
+
+function getWorldPosition(object) {
+  const position = new THREE.Vector3();
+  object.getWorldPosition(position);
+  return position;
+}
+
+function getLocalPositionForWorldPoint(object, worldPoint) {
+  const parent = object.parent;
+  if (!parent) return worldPoint.toArray();
+  const localPoint = parent.worldToLocal(worldPoint.clone());
+  return localPoint.toArray();
+}
+
+function getCameraYawPitch(camera) {
+  const direction = new THREE.Vector3();
+  camera.getWorldDirection(direction);
+  return {
+    yaw: Math.atan2(-direction.x, -direction.z),
+    pitch: Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1))
+  };
+}
+
+function getPartWorldPosition(mesh) {
+  const box = new THREE.Box3().setFromObject(mesh);
+  if (!box.isEmpty()) return box.getCenter(new THREE.Vector3());
+  return getWorldPosition(mesh);
 }
 
 function createPlaceholderModel(selectedPartId) {
@@ -357,6 +417,10 @@ function isPendingPlaceholderActive(placeholder) {
 }
 
 function ThreeViewport({
+  workspaceMode,
+  hasMakerPlacement,
+  makerMovablePartIds,
+  playInteractableParts,
   selectedPartId,
   selectedTool,
   modelUrl,
@@ -369,6 +433,9 @@ function ThreeViewport({
   fitViewToken,
   onSelectPart,
   onCreateSceneObject,
+  onMakerPlacementChange,
+  onPartTransformChange,
+  onPlayInteractableChange,
   onDraftFeedback,
   fallbackPartId,
   onStatusChange,
@@ -392,6 +459,7 @@ function ThreeViewport({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = 'three-canvas';
+    renderer.domElement.dataset.workspaceMode = normalizeWorkspaceMode(workspaceMode);
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -404,12 +472,37 @@ function ThreeViewport({
     const defaultSpherical = spherical.clone();
     let resetViewVersion = resetViewToken;
     let fitViewVersion = fitViewToken;
-
+    const activeWorkspaceMode = normalizeWorkspaceMode(workspaceMode);
     function updateCamera() {
       camera.position.setFromSpherical(spherical).add(target);
       camera.lookAt(target);
     }
     updateCamera();
+    const initialPlayAngles = getCameraYawPitch(camera);
+    const playState = {
+      locked: false,
+      keys: new Set(),
+      yaw: initialPlayAngles.yaw,
+      pitch: initialPlayAngles.pitch,
+      eyeHeight: 1.7,
+      speed: 2.8
+    };
+
+    function updatePlayCameraRotation() {
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = playState.yaw;
+      camera.rotation.x = playState.pitch;
+      camera.rotation.z = 0;
+    }
+
+    function enterPlayCamera() {
+      camera.position.y = Math.max(camera.position.y, playState.eyeHeight);
+      updatePlayCameraRotation();
+    }
+
+    if (activeWorkspaceMode === 'play') {
+      enterPlayCamera();
+    }
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.7);
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
@@ -544,11 +637,15 @@ function ThreeViewport({
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    const movablePartIds = new Set(makerMovablePartIds);
+    const interactablePartById = new Map(playInteractableParts.map((part) => [part.id, part]));
+    let lastInteractableId = null;
     const pointerState = {
       button: 0,
       isDragging: false,
       mode: 'orbit',
       draft: null,
+      move: null,
       pointerId: null,
       startX: 0,
       startY: 0,
@@ -563,6 +660,7 @@ function ThreeViewport({
     }
 
     function selectMeshAtPointer(event) {
+      if (activeWorkspaceMode === 'play') return;
       setPointerFromEvent(event);
       raycaster.setFromCamera(pointer, camera);
       const [hit] = raycaster.intersectObjects(selectableMeshes, false);
@@ -572,6 +670,18 @@ function ThreeViewport({
         return;
       }
 
+      if (activeWorkspaceMode === 'maker') {
+        const placement = getMakerPlacementAtPointer(event);
+        onMakerPlacementChange?.(placement);
+        const label =
+          placement.source === 'surface'
+            ? 'Maker placement: surface'
+            : placement.source === 'ground'
+              ? 'Maker placement: ground'
+              : 'Maker placement: camera';
+        onDraftFeedback(label);
+      }
+
       onSelectPart(hit?.object?.userData.partId ?? selectedPartId ?? fallbackPartId);
     }
 
@@ -579,6 +689,45 @@ function ThreeViewport({
       setPointerFromEvent(event);
       raycaster.setFromCamera(pointer, camera);
       return raycaster.intersectObjects(selectableMeshes, false).find((hit) => !hit.object.userData.isDraftPreview) ?? null;
+    }
+
+    function getMakerMovableHitAtPointer(event) {
+      if (activeWorkspaceMode !== 'maker') return null;
+      if (['annotation', 'line', 'cut'].includes(selectedTool)) return null;
+      const hit = getMeshHitAtPointer(event);
+      const partId = hit?.object?.userData.partId;
+      if (!partId || !movablePartIds.has(partId)) return null;
+      return hit;
+    }
+
+    function getGroundPointAtPointer(event, fallbackY = 0) {
+      setPointerFromEvent(event);
+      raycaster.setFromCamera(pointer, camera);
+      const groundPoint = new THREE.Vector3();
+      const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fallbackY);
+      return raycaster.ray.intersectPlane(groundPlane, groundPoint) ? groundPoint : null;
+    }
+
+    function getMakerPlacementAtPointer(event) {
+      const hit = getMeshHitAtPointer(event);
+      if (hit) {
+        const payload = buildHitPayload(hit);
+        return {
+          ...payload,
+          position: payload.point,
+          source: 'surface'
+        };
+      }
+
+      setPointerFromEvent(event);
+      raycaster.setFromCamera(pointer, camera);
+      const groundPoint = new THREE.Vector3();
+      const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      if (raycaster.ray.intersectPlane(groundPlane, groundPoint)) {
+        return createPlacementPayload({ point: groundPoint, source: 'ground' });
+      }
+
+      return getCameraFallbackPlacement(camera);
     }
 
     function removePreviewObject() {
@@ -630,13 +779,36 @@ function ThreeViewport({
       pointerState.button = event.button;
       pointerState.isDragging = false;
       pointerState.draft = null;
+      pointerState.move = null;
       pointerState.pointerId = event.pointerId;
       pointerState.startX = event.clientX;
       pointerState.startY = event.clientY;
       pointerState.lastX = event.clientX;
       pointerState.lastY = event.clientY;
 
-      if (event.button === 0 && ['line', 'cut'].includes(selectedTool)) {
+      if (activeWorkspaceMode === 'play') {
+        if (event.button === 0 && document.pointerLockElement !== renderer.domElement) {
+          renderer.domElement.requestPointerLock?.();
+        }
+        return;
+      }
+
+      const movableHit = event.button === 0 ? getMakerMovableHitAtPointer(event) : null;
+
+      if (movableHit) {
+        const partId = movableHit.object.userData.partId;
+        const objectWorldPosition = getWorldPosition(movableHit.object);
+        const groundPoint = getGroundPointAtPointer(event, objectWorldPosition.y) ?? objectWorldPosition.clone();
+        pointerState.mode = 'move';
+        pointerState.move = {
+          object: movableHit.object,
+          partId,
+          initialWorldPosition: objectWorldPosition,
+          dragOffset: objectWorldPosition.clone().sub(groundPoint)
+        };
+        onSelectPart(partId);
+        onDraftFeedback('Move generated asset | release to confirm');
+      } else if (event.button === 0 && ['line', 'cut'].includes(selectedTool)) {
         const hit = getMeshHitAtPointer(event);
         if (hit) {
           const payload = buildHitPayload(hit);
@@ -682,6 +854,19 @@ function ThreeViewport({
         return;
       }
 
+      if (pointerState.mode === 'move') {
+        const move = pointerState.move;
+        if (!move) return;
+        const groundPoint = getGroundPointAtPointer(event, move.initialWorldPosition.y);
+        if (!groundPoint) return;
+        const nextWorldPosition = groundPoint.add(move.dragOffset);
+        nextWorldPosition.y = move.initialWorldPosition.y;
+        const nextLocalPosition = getLocalPositionForWorldPoint(move.object, nextWorldPosition);
+        move.object.position.set(nextLocalPosition[0], nextLocalPosition[1], nextLocalPosition[2]);
+        onDraftFeedback(`Move ${formatVector(nextLocalPosition)} | release to confirm`);
+        return;
+      }
+
       if (pointerState.mode === 'pan') {
         const panScale = spherical.radius * 0.0016;
         const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
@@ -719,6 +904,24 @@ function ThreeViewport({
         return;
       }
 
+      if (pointerState.mode === 'move') {
+        const move = pointerState.move;
+        pointerState.move = null;
+        onDraftFeedback('');
+        if (move && pointerState.isDragging) {
+          const position = move.object.position.toArray();
+          onPartTransformChange?.(move.partId, { position });
+          onMakerPlacementChange?.(
+            createPlacementPayload({
+              point: getWorldPosition(move.object),
+              source: 'surface',
+              partId: move.partId
+            })
+          );
+        }
+        return;
+      }
+
       if (!pointerState.isDragging && pointerState.button === 0) {
         selectMeshAtPointer(event);
       }
@@ -726,6 +929,7 @@ function ThreeViewport({
 
     function handleWheel(event) {
       event.preventDefault();
+      if (activeWorkspaceMode === 'play') return;
       const zoomDelta = event.deltaY > 0 ? 1.08 : 0.92;
       spherical.radius = THREE.MathUtils.clamp(spherical.radius * zoomDelta, 2.6, 7.2);
       updateCamera();
@@ -736,16 +940,104 @@ function ThreeViewport({
     }
 
     function handleDoubleClick() {
+      if (activeWorkspaceMode === 'play') return;
       target.set(0, 0.18, 0);
       spherical.copy(defaultSpherical);
       updateCamera();
     }
 
     function handleKeyDown(event) {
+      const key = event.key.toLowerCase();
+      if (activeWorkspaceMode === 'play') {
+        if (['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'].includes(key)) {
+          event.preventDefault();
+          event.stopPropagation();
+          playState.keys.add(key);
+          return;
+        }
+        if (key === 'escape') {
+          playState.keys.clear();
+          return;
+        }
+      }
+
       if (event.key === 'Escape' && pointerState.draft) {
         event.preventDefault();
         cancelDraft();
       }
+    }
+
+    function handleKeyUp(event) {
+      if (activeWorkspaceMode !== 'play') return;
+      const key = event.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'].includes(key)) {
+        event.preventDefault();
+        event.stopPropagation();
+        playState.keys.delete(key);
+      }
+    }
+
+    function handlePointerLockChange() {
+      playState.locked = document.pointerLockElement === renderer.domElement;
+      onDraftFeedback(playState.locked ? 'Play mode: WASD to move | mouse to look | Esc to unlock' : '');
+    }
+
+    function handleMouseMove(event) {
+      if (activeWorkspaceMode !== 'play' || document.pointerLockElement !== renderer.domElement) return;
+      playState.yaw -= event.movementX * 0.0022;
+      playState.pitch = THREE.MathUtils.clamp(playState.pitch - event.movementY * 0.0022, -1.28, 1.28);
+      updatePlayCameraRotation();
+    }
+
+    function updatePlayMovement(deltaSeconds) {
+      if (activeWorkspaceMode !== 'play') return;
+      const forwardInput = (playState.keys.has('w') || playState.keys.has('arrowup') ? 1 : 0) - (playState.keys.has('s') || playState.keys.has('arrowdown') ? 1 : 0);
+      const sideInput = (playState.keys.has('d') || playState.keys.has('arrowright') ? 1 : 0) - (playState.keys.has('a') || playState.keys.has('arrowleft') ? 1 : 0);
+      if (!forwardInput && !sideInput) return;
+
+      const forward = new THREE.Vector3(-Math.sin(playState.yaw), 0, -Math.cos(playState.yaw));
+      const right = new THREE.Vector3(Math.cos(playState.yaw), 0, -Math.sin(playState.yaw));
+      const movement = new THREE.Vector3()
+        .addScaledVector(forward, forwardInput)
+        .addScaledVector(right, sideInput);
+      if (movement.lengthSq() === 0) return;
+      movement.normalize().multiplyScalar(playState.speed * deltaSeconds);
+      camera.position.add(movement);
+      camera.position.y = playState.eyeHeight;
+    }
+
+    function updatePlayInteractable() {
+      if (activeWorkspaceMode !== 'play') return;
+      let nearest = null;
+
+      selectableMeshes.forEach((mesh) => {
+        const partId = mesh.userData.partId;
+        const part = interactablePartById.get(partId);
+        if (!part || mesh.visible === false) return;
+
+        const distance = camera.position.distanceTo(getPartWorldPosition(mesh));
+        if (distance > PLAY_INTERACTION_DISTANCE) return;
+        if (!nearest || distance < nearest.distance) {
+          nearest = {
+            id: part.id,
+            name: part.name,
+            distance
+          };
+        }
+      });
+
+      const nextId = nearest?.id ?? null;
+      if (nextId === lastInteractableId) return;
+      lastInteractableId = nextId;
+      onPlayInteractableChange?.(
+        nearest
+          ? {
+              id: nearest.id,
+              name: nearest.name,
+              distance: Number(nearest.distance.toFixed(2))
+            }
+          : null
+      );
     }
 
     function fitView() {
@@ -763,21 +1055,39 @@ function ThreeViewport({
     let frameId = 0;
     const clock = new THREE.Clock();
     function render() {
-      const elapsedSeconds = clock.getElapsedTime();
+      const deltaSeconds = Math.min(clock.getDelta(), 0.05);
+      const elapsedSeconds = clock.elapsedTime;
       if (resetViewVersion !== resetViewToken) {
         resetViewVersion = resetViewToken;
-        handleDoubleClick();
+        if (activeWorkspaceMode === 'play') {
+          camera.position.set(0, playState.eyeHeight, 4.65);
+          playState.yaw = 0;
+          playState.pitch = 0;
+          updatePlayCameraRotation();
+        } else {
+          handleDoubleClick();
+        }
       }
       if (fitViewVersion !== fitViewToken) {
         fitViewVersion = fitViewToken;
-        fitView();
+        if (activeWorkspaceMode !== 'play') {
+          fitView();
+        }
       }
+      updatePlayMovement(deltaSeconds);
+      updatePlayInteractable();
       pendingPlaceholderGroups.forEach((placeholderGroup) => updatePendingPlaceholder(placeholderGroup, elapsedSeconds));
       renderer.render(scene, camera);
       frameId = window.requestAnimationFrame(render);
     }
-    if (fitViewToken > 0) {
+    if (fitViewToken > 0 && activeWorkspaceMode !== 'play') {
       fitView();
+    }
+    if (activeWorkspaceMode === 'maker' && !hasMakerPlacement) {
+      onMakerPlacementChange?.(getCameraFallbackPlacement(camera));
+    }
+    if (activeWorkspaceMode !== 'play') {
+      onPlayInteractableChange?.(null);
     }
     render();
 
@@ -788,7 +1098,10 @@ function ThreeViewport({
     renderer.domElement.addEventListener('wheel', handleWheel, { passive: false });
     renderer.domElement.addEventListener('contextmenu', handleContextMenu);
     renderer.domElement.addEventListener('dblclick', handleDoubleClick);
-    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    document.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
 
     return () => {
       disposed = true;
@@ -800,7 +1113,14 @@ function ThreeViewport({
       renderer.domElement.removeEventListener('wheel', handleWheel);
       renderer.domElement.removeEventListener('contextmenu', handleContextMenu);
       renderer.domElement.removeEventListener('dblclick', handleDoubleClick);
-      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      document.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+      if (document.pointerLockElement === renderer.domElement) {
+        document.exitPointerLock?.();
+      }
+      onPlayInteractableChange?.(null);
       resizeObserver.disconnect();
       cameraStateRef.current = {
         target: target.toArray(),
@@ -828,11 +1148,18 @@ function ThreeViewport({
     onPartRegistryChange,
     onCreateSceneObject,
     onSelectPart,
-      onStatusChange,
+    onMakerPlacementChange,
+    onPartTransformChange,
+    onPlayInteractableChange,
+    onStatusChange,
     onDraftFeedback,
     sceneObjects,
+    hasMakerPlacement,
+    makerMovablePartIds,
+    playInteractableParts,
     selectedPartId,
-    selectedTool
+    selectedTool,
+    workspaceMode
   ]);
 
   return <div ref={mountRef} className="three-canvas-host" aria-hidden="true" />;
@@ -842,13 +1169,21 @@ export function SceneViewport({
   scene,
   model,
   viewport,
+  workspaceMode = 'edit',
   selectedPartId,
   selectedTool = 'mouse',
   sceneObjects = [],
   pendingPlaceholders = [],
   partOverrides = {},
+  makerPlacement = null,
+  makerMovablePartIds = [],
+  playInteractable = null,
+  playInteractableParts = [],
   onSelectPart,
   onCreateSceneObject,
+  onMakerPlacementChange,
+  onPartTransformChange,
+  onPlayInteractableChange,
   onModelStatusChange,
   onPartRegistryChange
 }) {
@@ -858,6 +1193,7 @@ export function SceneViewport({
   const [draftFeedback, setDraftFeedback] = useState('');
   const cameraStateRef = useRef(null);
   const selectedPart = scene.components.find((component) => component.id === selectedPartId);
+  const activeMode = normalizeWorkspaceMode(workspaceMode);
   const activeTool = selectedTool === 'zoom' ? 'zoom-in' : selectedTool;
   const fallbackPartId = scene.components[0]?.id ?? null;
   const modelUrl = useMemo(() => getModelUrl(model, scene), [model, scene]);
@@ -870,17 +1206,18 @@ export function SceneViewport({
 
   useEffect(() => {
     setDraftFeedback('');
-  }, [activeTool]);
+  }, [activeMode, activeTool]);
 
   useEffect(() => {
     onModelStatusChange?.(modelStatus);
   }, [modelStatus, onModelStatusChange]);
 
   return (
-    <section className={`viewport-panel scene-viewport scene-viewport-tool-${activeTool}`}>
+    <section className={`viewport-panel scene-viewport scene-viewport-mode-${activeMode} scene-viewport-tool-${activeTool}`}>
       <div className="viewport-header">
         <h2 className="panel-title">Object viewport</h2>
         <span>Scene preview</span>
+        <span className="viewport-mode-pill">{getModeLabel(activeMode)} mode</span>
         <span className="viewport-tool-pill">{getToolLabel(activeTool)}</span>
       </div>
       <p className="viewport-meta">
@@ -892,8 +1229,10 @@ export function SceneViewport({
         <p className="viewport-empty">No scene components available.</p>
       ) : (
         <>
-          <div className="viewport-stage" aria-label={`3D model viewport, ${getToolLabel(activeTool)} mode`}>
+          <div className="viewport-stage" aria-label={`3D model viewport, ${getModeLabel(activeMode)} mode, ${getToolLabel(activeTool)} tool`}>
             <ThreeViewport
+              workspaceMode={activeMode}
+              hasMakerPlacement={Boolean(makerPlacement)}
               selectedPartId={selectedPartId}
               selectedTool={activeTool}
               modelUrl={modelUrl}
@@ -901,12 +1240,17 @@ export function SceneViewport({
               sceneObjects={sceneObjects}
               pendingPlaceholders={pendingPlaceholders}
               partOverrides={partOverrides}
+              makerMovablePartIds={makerMovablePartIds}
+              playInteractableParts={playInteractableParts}
               cameraStateRef={cameraStateRef}
               resetViewToken={resetViewToken}
               fitViewToken={fitViewToken}
               fallbackPartId={fallbackPartId}
               onSelectPart={onSelectPart}
               onCreateSceneObject={onCreateSceneObject}
+              onMakerPlacementChange={onMakerPlacementChange}
+              onPartTransformChange={onPartTransformChange}
+              onPlayInteractableChange={onPlayInteractableChange}
               onDraftFeedback={setDraftFeedback}
               onStatusChange={setModelStatus}
               onPartRegistryChange={onPartRegistryChange}
@@ -923,7 +1267,13 @@ export function SceneViewport({
               {getModelStatusLabel(modelStatus)}
             </div>
             <div className="viewport-interaction-hint" aria-hidden="true">
-              Drag to orbit | Shift-drag to pan | Wheel to zoom
+              {activeMode === 'maker'
+                ? 'Click surface or ground to set spawn point | Drag to orbit'
+                : activeMode === 'play'
+                  ? playInteractable
+                    ? `Press E near ${playInteractable.name}`
+                    : 'Click viewport to look | WASD to move | Esc to unlock'
+                  : 'Drag to orbit | Shift-drag to pan | Wheel to zoom'}
             </div>
             {modelStatus === 'loading' ? (
               <div className="viewport-loading-card" aria-live="polite">
@@ -938,13 +1288,15 @@ export function SceneViewport({
             ) : null}
             <div className="viewport-tool-feedback" aria-hidden="true">
               {draftFeedback ||
-                (activeTool === 'zoom-in'
-                ? 'Zoom +12%'
-                : activeTool === 'zoom-out'
-                  ? 'Zoom -12%'
-                  : ['annotation', 'line', 'cut'].includes(activeTool)
-                    ? getToolInstruction(activeTool)
-                    : getToolLabel(activeTool))}
+                (activeMode === 'maker' && makerPlacement
+                  ? `Maker spawn: ${formatVector(makerPlacement.position)}`
+                  : activeTool === 'zoom-in'
+                    ? 'Zoom +12%'
+                    : activeTool === 'zoom-out'
+                      ? 'Zoom -12%'
+                      : ['annotation', 'line', 'cut'].includes(activeTool)
+                        ? getToolInstruction(activeTool)
+                        : getToolLabel(activeTool))}
             </div>
           </div>
           <div className="viewport-selection-card">

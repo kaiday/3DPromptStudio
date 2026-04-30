@@ -58,7 +58,8 @@ export function createMockGenerationJob(projectId, payload = {}) {
     updatedAt: now,
     modelUrl: null,
     metadataUrl: null,
-    previewUrl: null
+    previewUrl: null,
+    placement: payload.placement ?? { position: [0, 0, 0] }
   };
   return { job };
 }

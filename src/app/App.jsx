@@ -9,6 +9,7 @@ import { uploadModel } from '../api/modelApi.js';
 import { submitPrompt } from '../api/promptApi.js';
 import { fetchWorkspace, patchWorkspace, redoWorkspace, undoWorkspace } from '../api/projectApi.js';
 import { ErrorBanner } from '../components/ErrorBanner.jsx';
+import { DialoguePanel } from '../components/DialoguePanel.jsx';
 import { GenerationQueue } from '../components/GenerationQueue.jsx';
 import { LoadingOverlay } from '../components/LoadingOverlay.jsx';
 import { PartInspector } from '../components/PartInspector.jsx';
@@ -32,6 +33,12 @@ const TOOL_OPTIONS = [
   { id: 'zoom-in', label: 'Zoom in', shortcut: '+', icon: 'zoomIn' },
   { id: 'zoom-out', label: 'Zoom out', shortcut: '-', icon: 'zoomOut' }
 ];
+const WORKSPACE_MODES = new Set(['edit', 'maker', 'play']);
+const MODE_OPTIONS = [
+  { id: 'edit', label: 'Edit' },
+  { id: 'maker', label: 'Maker' },
+  { id: 'play', label: 'Play' }
+];
 
 function getInitialTheme() {
   if (typeof window === 'undefined') return 'dark';
@@ -54,6 +61,10 @@ function toBackendTool(tool) {
   const normalizedTool = normalizeTool(tool);
   if (normalizedTool === 'zoom-in' || normalizedTool === 'zoom-out') return 'zoom';
   return normalizedTool;
+}
+
+function normalizeWorkspaceMode(mode) {
+  return WORKSPACE_MODES.has(mode) ? mode : 'edit';
 }
 
 function isTypingTarget(target) {
@@ -250,14 +261,27 @@ function isCreationPrompt(prompt) {
   );
 }
 
-function createGenerationPayload(prompt, workspace, selectedComponentId, source = 'prompt') {
+function normalizePlacementVector(vector, fallback = [0, 0, 0]) {
+  if (!Array.isArray(vector) || vector.length < 3) return fallback;
+  const nextVector = vector.slice(0, 3).map((value, index) => {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : fallback[index];
+  });
+  return nextVector;
+}
+
+function createGenerationPayload(prompt, workspace, selectedComponentId, source = 'prompt', placement = null) {
+  const position = normalizePlacementVector(placement?.position);
+  const normal = normalizePlacementVector(placement?.normal, [0, 1, 0]);
   return {
     prompt,
     source,
     sceneId: workspace?.workspaceId ?? PROJECT_ID,
     selectedComponentId,
     placement: {
-      position: [0, 0, 0]
+      position,
+      normal,
+      source: placement?.source ?? 'default'
     }
   };
 }
@@ -326,16 +350,24 @@ function isGeneratedPart(part) {
   );
 }
 
+function getDialogueLinesFromInteractions(interactions = []) {
+  const dialogueInteraction = interactions.find((interaction) => interaction.kind === 'dialogue');
+  const lines = dialogueInteraction?.payload?.lines;
+  return Array.isArray(lines) ? lines.map((line) => String(line).trim()).filter(Boolean) : [];
+}
+
 function TopBar({
   theme,
   workspace,
   importedModel,
   importedModelState,
   queuedOperationCount,
+  workspaceMode,
   onThemeToggle,
   onSampleModelLoad,
   onModelImport,
   onClearImportedModel,
+  onWorkspaceModeChange,
   onDiscardQueuedOperations
 }) {
   const modelInputRef = useRef(null);
@@ -380,6 +412,20 @@ function TopBar({
             </button>
           </div>
         ) : null}
+        <div className="mode-switcher" role="radiogroup" aria-label="Workspace mode">
+          {MODE_OPTIONS.map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              className={`mode-switcher-button ${workspaceMode === mode.id ? 'mode-switcher-button-active' : ''}`}
+              aria-checked={workspaceMode === mode.id}
+              role="radio"
+              onClick={() => onWorkspaceModeChange(mode.id)}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
         <button type="button" className="chip theme-chip" onClick={onThemeToggle}>
           {theme === 'dark' ? 'Light mode' : 'Dark mode'}
         </button>
@@ -542,29 +588,30 @@ function ComponentsPanel({ parts, selectedPartId, emptyMessage = 'No components 
   );
 }
 
-function FloatingToolbar({ selectedTool, canUndo, canRedo, onToolChange, onUndo, onRedo }) {
+function FloatingToolbar({ selectedTool, canUndo, canRedo, disabled = false, onToolChange, onUndo, onRedo }) {
   const activeTool = normalizeTool(selectedTool);
 
   return (
-    <footer className="floating-toolbar" role="toolbar" aria-label="Workspace tools">
+    <footer className={`floating-toolbar ${disabled ? 'floating-toolbar-disabled' : ''}`} role="toolbar" aria-label="Workspace tools">
       {TOOL_OPTIONS.map((tool) => (
         <button
           key={tool.id}
           type="button"
           aria-label={tool.label}
           aria-pressed={activeTool === tool.id}
-          title={`${tool.label} (${tool.shortcut})`}
+          title={disabled ? 'Editor tools are disabled in Play mode' : `${tool.label} (${tool.shortcut})`}
           onClick={() => onToolChange(tool.id)}
+          disabled={disabled}
           className={`tool-button ${activeTool === tool.id ? 'tool-button-active' : ''}`}
         >
           <ToolIcon name={tool.icon} />
         </button>
       ))}
       <span className="toolbar-separator" aria-hidden="true" />
-      <button type="button" className="tool-button" aria-label="Undo" title="Undo" onClick={onUndo} disabled={!canUndo}>
+      <button type="button" className="tool-button" aria-label="Undo" title="Undo" onClick={onUndo} disabled={disabled || !canUndo}>
         <ToolIcon name="undo" />
       </button>
-      <button type="button" className="tool-button" aria-label="Redo" title="Redo" onClick={onRedo} disabled={!canRedo}>
+      <button type="button" className="tool-button" aria-label="Redo" title="Redo" onClick={onRedo} disabled={disabled || !canRedo}>
         <ToolIcon name="redo" />
       </button>
     </footer>
@@ -795,6 +842,9 @@ export default function App() {
   const [importedModelState, setImportedModelState] = useState({ status: 'idle', meshCount: 0 });
   const [partOverrides, setPartOverrides] = useState({});
   const [sceneObjects, setSceneObjects] = useState([]);
+  const [makerPlacement, setMakerPlacement] = useState(null);
+  const [playInteractable, setPlayInteractable] = useState(null);
+  const [activeDialogue, setActiveDialogue] = useState(null);
   const [editHistory, setEditHistory] = useState([]);
   const [operationQueue, setOperationQueue] = useState([]);
   const [operationSubmitState, setOperationSubmitState] = useState({ status: 'idle', message: '' });
@@ -929,9 +979,16 @@ export default function App() {
   );
 
   const activeWorkspace = useMemo(
-    () => (localModel ? { ...sceneStore.workspace, model: localModel } : sceneStore.workspace),
+    () => {
+      if (!sceneStore.workspace) return sceneStore.workspace;
+      const workspaceMode = normalizeWorkspaceMode(sceneStore.workspace.workspaceMode);
+      return localModel
+        ? { ...sceneStore.workspace, workspaceMode, model: localModel }
+        : { ...sceneStore.workspace, workspaceMode };
+    },
     [localModel, sceneStore.workspace]
   );
+  const workspaceMode = normalizeWorkspaceMode(activeWorkspace?.workspaceMode);
 
   const operationPayload = useMemo(
     () => ({
@@ -962,6 +1019,14 @@ export default function App() {
     [displayParts, selectionStore.selectedPartId]
   );
   const selectedPartIsGenerated = isGeneratedPart(selectedPart);
+  const makerMovablePartIds = useMemo(
+    () => displayParts.filter(isGeneratedPart).map((part) => part.id),
+    [displayParts]
+  );
+  const playInteractableParts = useMemo(
+    () => displayParts.filter(isGeneratedPart).map((part) => ({ id: part.id, name: part.name ?? 'Generated entity' })),
+    [displayParts]
+  );
   const selectedGeneratedInteractions = selectedPart ? (generatedInteractionsByComponentId[selectedPart.id] ?? []) : [];
 
   useEffect(() => {
@@ -1425,9 +1490,74 @@ export default function App() {
     }
   }
 
+  async function handleWorkspaceModeChange(mode) {
+    try {
+      setError('');
+      if (normalizeWorkspaceMode(mode) !== 'play') {
+        setActiveDialogue(null);
+        setPlayInteractable(null);
+      }
+      await persistWorkspacePatch({ workspaceMode: normalizeWorkspaceMode(mode) });
+    } catch (saveError) {
+      setError(saveError.message);
+    }
+  }
+
+  const handleDialogueClose = useCallback(() => {
+    setActiveDialogue(null);
+  }, []);
+
+  const handlePlayDialogueOpen = useCallback(async () => {
+    if (!playInteractable?.id || activeDialogue) return;
+
+    let interactions = generatedInteractionsByComponentId[playInteractable.id];
+    if (!interactions) {
+      try {
+        setGeneratedInteractionState((current) => ({
+          ...current,
+          loadingComponentId: playInteractable.id,
+          errorComponentId: null,
+          error: ''
+        }));
+        const payload = await fetchComponentInteractions(PROJECT_ID, playInteractable.id);
+        interactions = payload.interactions ?? [];
+        setGeneratedInteractionsByComponentId((current) => ({
+          ...current,
+          [playInteractable.id]: interactions
+        }));
+        setGeneratedInteractionState((current) => ({
+          ...current,
+          loadingComponentId: current.loadingComponentId === playInteractable.id ? null : current.loadingComponentId
+        }));
+      } catch (loadError) {
+        interactions = [];
+        setGeneratedInteractionState((current) => ({
+          ...current,
+          loadingComponentId: current.loadingComponentId === playInteractable.id ? null : current.loadingComponentId,
+          errorComponentId: playInteractable.id,
+          error: loadError.message
+        }));
+      }
+    }
+
+    const dialogueLines = getDialogueLinesFromInteractions(interactions);
+    setActiveDialogue({
+      id: playInteractable.id,
+      name: playInteractable.name,
+      lines: dialogueLines.length ? dialogueLines : ['Hello. I am ready to talk.']
+    });
+  }, [activeDialogue, generatedInteractionsByComponentId, playInteractable]);
+
   useEffect(() => {
     function handleKeyDown(event) {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) return;
+      if (workspaceMode === 'play') {
+        if (event.key.toLowerCase() === 'e' && playInteractable && !activeDialogue) {
+          event.preventDefault();
+          handlePlayDialogueOpen();
+        }
+        return;
+      }
 
       const key = event.key.toLowerCase();
       const shortcutTool =
@@ -1452,7 +1582,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeDialogue, handlePlayDialogueOpen, playInteractable, workspaceMode]);
 
   async function handlePanelModeChange(mode) {
     try {
@@ -1510,7 +1640,14 @@ export default function App() {
   }
 
   async function startGenerationJob(prompt, source = 'prompt') {
-    const generationPayload = createGenerationPayload(prompt, sceneStore.workspace, selectionStore.selectedPartId, source);
+    const activeGenerationPlacement = normalizeWorkspaceMode(sceneStore.workspace?.workspaceMode) === 'maker' ? makerPlacement : null;
+    const generationPayload = createGenerationPayload(
+      prompt,
+      sceneStore.workspace,
+      selectionStore.selectedPartId,
+      source,
+      activeGenerationPlacement
+    );
     let jobPayload;
     try {
       jobPayload = await createGenerationJob(PROJECT_ID, generationPayload);
@@ -1608,10 +1745,12 @@ export default function App() {
         importedModel={localModel}
         importedModelState={importedModelState}
         queuedOperationCount={queuedOperationCount}
+        workspaceMode={workspaceMode}
         onThemeToggle={() => setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))}
         onSampleModelLoad={handleSampleModelLoad}
         onModelImport={handleModelImport}
         onClearImportedModel={handleClearImportedModel}
+        onWorkspaceModeChange={handleWorkspaceModeChange}
         onDiscardQueuedOperations={handleDiscardQueuedOperations}
       />
 
@@ -1653,13 +1792,21 @@ export default function App() {
             scene={displayScene}
             model={activeModel}
             viewport={sceneStore.viewport}
+            workspaceMode={workspaceMode}
             selectedPartId={selectionStore.selectedPartId}
             selectedTool={normalizeTool(sceneStore.workspace?.selectedTool)}
             sceneObjects={sceneObjects}
             pendingPlaceholders={generationStore.placeholders}
             partOverrides={partOverrides}
+            makerPlacement={makerPlacement}
+            makerMovablePartIds={makerMovablePartIds}
+            playInteractable={playInteractable}
+            playInteractableParts={playInteractableParts}
             onSelectPart={handlePartSelect}
             onCreateSceneObject={handleCreateSceneObject}
+            onMakerPlacementChange={setMakerPlacement}
+            onPartTransformChange={handlePartChange}
+            onPlayInteractableChange={setPlayInteractable}
             onModelStatusChange={handleModelStatusChange}
             onPartRegistryChange={handlePartRegistryChange}
           />
@@ -1667,10 +1814,18 @@ export default function App() {
             selectedTool={sceneStore.workspace?.selectedTool}
             canUndo={historyStore.canUndo}
             canRedo={historyStore.canRedo}
+            disabled={workspaceMode === 'play'}
             onToolChange={handleToolChange}
             onUndo={handleUndo}
             onRedo={handleRedo}
           />
+          {activeDialogue ? (
+            <DialoguePanel
+              speakerName={activeDialogue.name}
+              lines={activeDialogue.lines}
+              onClose={handleDialogueClose}
+            />
+          ) : null}
         </section>
 
         {isRightPanelOpen ? (
