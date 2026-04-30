@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5188 --strictPort",
     "build": "vite build",
+    "check:nervorg-adapter": "node scripts/validate-nervorg-generation-adapter.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 5189 --strictPort"
   },
   "dependencies": {
