@@ -107,6 +107,18 @@ function applyPartOverrides(meshes, partOverrides) {
       mesh.material.color.set(override.material.color);
       mesh.material.needsUpdate = true;
     }
+
+    if (Array.isArray(override.position) && override.position.length >= 3) {
+      mesh.position.set(Number(override.position[0]) || 0, Number(override.position[1]) || 0, Number(override.position[2]) || 0);
+    }
+
+    if (Array.isArray(override.rotation) && override.rotation.length >= 3) {
+      mesh.rotation.set(Number(override.rotation[0]) || 0, Number(override.rotation[1]) || 0, Number(override.rotation[2]) || 0);
+    }
+
+    if (Array.isArray(override.scale) && override.scale.length >= 3) {
+      mesh.scale.set(Number(override.scale[0]) || 1, Number(override.scale[1]) || 1, Number(override.scale[2]) || 1);
+    }
   });
 }
 
