@@ -48,6 +48,46 @@ function normalizeOperation(operation) {
     };
   }
 
+  if (operation.type === 'setPosition') {
+    if (!targetId || !Array.isArray(operation.payload?.position)) return null;
+    return {
+      type: 'setPosition',
+      target: { componentId: targetId },
+      payload: {
+        position: operation.payload.position,
+        mode: operation.payload.mode ?? 'absolute'
+      },
+      source: { kind: 'manual', agent: 'frontend' }
+    };
+  }
+
+  if (operation.type === 'setRotation') {
+    if (!targetId || !Array.isArray(operation.payload?.rotation)) return null;
+    return {
+      type: 'setRotation',
+      target: { componentId: targetId },
+      payload: {
+        rotation: operation.payload.rotation,
+        unit: operation.payload.unit ?? 'radians',
+        mode: operation.payload.mode ?? 'absolute'
+      },
+      source: { kind: 'manual', agent: 'frontend' }
+    };
+  }
+
+  if (operation.type === 'setScale') {
+    if (!targetId || !Array.isArray(operation.payload?.scale)) return null;
+    return {
+      type: 'setScale',
+      target: { componentId: targetId },
+      payload: {
+        scale: operation.payload.scale,
+        mode: operation.payload.mode ?? 'absolute'
+      },
+      source: { kind: 'manual', agent: 'frontend' }
+    };
+  }
+
   return null;
 }
 
@@ -67,7 +107,7 @@ export async function submitEditOperations(projectId, payload) {
   const operations = queuedOperations.map(normalizeOperation);
 
   if (operations.some((operation) => operation === null)) {
-    throw new Error('Some queued edits are annotations or unsupported local scene edits. Submit color/material/visibility edits through the Python operations API first.');
+    throw new Error('Some queued edits are annotations or unsupported local scene edits. Submit color/material/visibility/transform edits through the Python operations API first.');
   }
 
   const response = await fetch(`${API_ROOT}/projects/${encodeURIComponent(projectId)}/operations`, {

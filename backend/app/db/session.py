@@ -71,6 +71,26 @@ def init_db() -> None:
         )
         connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS component_interactions (
+              id TEXT PRIMARY KEY,
+              project_id TEXT NOT NULL,
+              component_id TEXT NOT NULL,
+              kind TEXT NOT NULL,
+              label TEXT NOT NULL,
+              payload_json TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_component_interactions_project_id ON component_interactions (project_id)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_component_interactions_component_id ON component_interactions (component_id)"
+        )
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS annotations (
               id TEXT PRIMARY KEY,
               project_id TEXT NOT NULL,

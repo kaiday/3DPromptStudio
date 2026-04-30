@@ -4,6 +4,7 @@ import { submitEditOperations } from '../api/editOperationsApi.js';
 import { cancelGenerationJob, createGenerationJob } from '../api/generationApi.js';
 import { subscribeToGenerationJob } from '../api/generationEvents.js';
 import { createMockGenerationJob, isMockGenerationEnabled, subscribeToMockGenerationJob } from '../api/generationMock.js';
+import { fetchComponentInteractions, saveComponentInteractions } from '../api/interactionsApi.js';
 import { uploadModel } from '../api/modelApi.js';
 import { submitPrompt } from '../api/promptApi.js';
 import { fetchWorkspace, patchWorkspace, redoWorkspace, undoWorkspace } from '../api/projectApi.js';
@@ -175,6 +176,40 @@ function createPartPatchOperation(part, patch) {
     };
   }
 
+  if (Array.isArray(patch.position)) {
+    return {
+      type: 'setPosition',
+      target: { componentId: part?.id },
+      payload: {
+        position: patch.position,
+        mode: 'absolute'
+      }
+    };
+  }
+
+  if (Array.isArray(patch.rotation)) {
+    return {
+      type: 'setRotation',
+      target: { componentId: part?.id },
+      payload: {
+        rotation: patch.rotation,
+        unit: 'radians',
+        mode: 'absolute'
+      }
+    };
+  }
+
+  if (Array.isArray(patch.scale)) {
+    return {
+      type: 'setScale',
+      target: { componentId: part?.id },
+      payload: {
+        scale: patch.scale,
+        mode: 'absolute'
+      }
+    };
+  }
+
   return {
     type: 'patch_part',
     payload: {
@@ -182,6 +217,17 @@ function createPartPatchOperation(part, patch) {
       patch
     }
   };
+}
+
+function createPartPatchLabel(part, partId, patch) {
+  const name = part?.name ?? partId;
+  if (patch.visible !== undefined) return `${patch.visible ? 'Show' : 'Hide'} ${name}`;
+  if (patch.name !== undefined) return `Rename ${name}`;
+  if (patch.position !== undefined) return `Move ${name}`;
+  if (patch.rotation !== undefined) return `Rotate ${name}`;
+  if (patch.scale !== undefined) return `Scale ${name}`;
+  if (patch.material?.color) return `Change color: ${name}`;
+  return `Edit ${name}`;
 }
 
 function createOperationRecord(operation, label) {
@@ -252,9 +298,32 @@ function createGeneratedModelFromEvent(job, event) {
     parts: getGeneratedMetadataParts(payload),
     metadata: {
       ...(payload.metadata ?? {}),
+      prompt: payload.metadata?.prompt ?? job.prompt,
+      jobId: payload.metadata?.jobId ?? job.id,
+      assetId: payload.metadata?.assetId ?? assetId,
       parts: getGeneratedMetadataParts(payload)
     }
   };
+}
+
+function isGeneratedPart(part) {
+  const metadata = part?.generatedMetadata ?? part?.generationMetadata ?? part?.metadata ?? {};
+  return Boolean(
+    part?.source === 'generated' ||
+      part?.source === 'generated-asset' ||
+      part?.kind === 'generated' ||
+      part?.type === 'generated' ||
+      part?.assetId ||
+      part?.generationJobId ||
+      part?.generationStatus ||
+      part?.modelUrl ||
+      part?.glbUrl ||
+      part?.glb_url ||
+      metadata.generated === true ||
+      metadata.assetId ||
+      metadata.jobId ||
+      metadata.prompt
+  );
 }
 
 function TopBar({
@@ -505,6 +574,9 @@ function FloatingToolbar({ selectedTool, canUndo, canRedo, onToolChange, onUndo,
 function InspectorPanel({
   activeRightPanel,
   selectedPart,
+  generatedInteractions,
+  generatedInteractionsSaving,
+  generatedInteractionsError,
   editHistory,
   operationQueue,
   operationPayload,
@@ -519,6 +591,10 @@ function InspectorPanel({
   onPanelModeChange,
   onPartChange,
   onPartRemove,
+  onGeneratedInteractionsChange,
+  onGeneratedInteractionsSave,
+  onGeneratedAssetDelete,
+  onGeneratedAssetHide,
   onClearSubmitted,
   onOperationSubmit,
   onPromptSubmit,
@@ -570,7 +646,18 @@ function InspectorPanel({
           </>
         ) : (
           <>
-            <PartInspector selectedPart={selectedPart} onPartChange={onPartChange} onPartRemove={onPartRemove} />
+            <PartInspector
+              selectedPart={selectedPart}
+              generatedInteractions={generatedInteractions}
+              generatedInteractionsSaving={generatedInteractionsSaving}
+              generatedInteractionsError={generatedInteractionsError}
+              onPartChange={onPartChange}
+              onPartRemove={onPartRemove}
+              onGeneratedInteractionsChange={onGeneratedInteractionsChange}
+              onGeneratedInteractionsSave={onGeneratedInteractionsSave}
+              onGeneratedAssetDelete={onGeneratedAssetDelete}
+              onGeneratedAssetHide={onGeneratedAssetHide}
+            />
             <EditOperationHistory operations={editHistory} />
             <OperationPayloadPreview
               operations={operationQueue}
@@ -712,6 +799,13 @@ export default function App() {
   const [operationQueue, setOperationQueue] = useState([]);
   const [operationSubmitState, setOperationSubmitState] = useState({ status: 'idle', message: '' });
   const [submissionHistory, setSubmissionHistory] = useState([]);
+  const [generatedInteractionsByComponentId, setGeneratedInteractionsByComponentId] = useState({});
+  const [generatedInteractionState, setGeneratedInteractionState] = useState({
+    loadingComponentId: null,
+    savingComponentId: null,
+    errorComponentId: null,
+    error: ''
+  });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -767,17 +861,38 @@ export default function App() {
     () => {
       const applyOverrides = (parts) =>
         parts.map((part) => {
+          const generatedPatch =
+            localModel?.source === 'generation'
+              ? {
+                  source: part.source ?? 'generated',
+                  generationJobId: part.generationJobId ?? localModel.generationJobId,
+                  modelUrl: part.modelUrl ?? localModel.fileUrl ?? localModel.url,
+                  assetId: part.assetId ?? localModel.id,
+                  generatedMetadata: {
+                    ...(localModel.metadata ?? {}),
+                    ...(part.generatedMetadata ?? {}),
+                    generated: true,
+                    prompt: part.generatedMetadata?.prompt ?? localModel.metadata?.prompt,
+                    jobId: part.generatedMetadata?.jobId ?? localModel.generationJobId,
+                    assetId: part.generatedMetadata?.assetId ?? localModel.id
+                  }
+                }
+              : {};
           const override = partOverrides[part.id];
           return override
             ? {
                 ...part,
+                ...generatedPatch,
                 ...override,
                 material: {
                   ...(part.material ?? {}),
                   ...(override.material ?? {})
                 }
               }
-            : part;
+            : {
+                ...part,
+                ...generatedPatch
+              };
         });
 
       if (localModel) {
@@ -846,6 +961,47 @@ export default function App() {
     () => displayParts.find((part) => part.id === selectionStore.selectedPartId) ?? null,
     [displayParts, selectionStore.selectedPartId]
   );
+  const selectedPartIsGenerated = isGeneratedPart(selectedPart);
+  const selectedGeneratedInteractions = selectedPart ? (generatedInteractionsByComponentId[selectedPart.id] ?? []) : [];
+
+  useEffect(() => {
+    if (!selectedPart?.id || !selectedPartIsGenerated) return;
+    if (generatedInteractionsByComponentId[selectedPart.id]) return;
+
+    let isCurrent = true;
+    setGeneratedInteractionState((current) => ({
+      ...current,
+      loadingComponentId: selectedPart.id,
+      errorComponentId: null,
+      error: ''
+    }));
+
+    fetchComponentInteractions(PROJECT_ID, selectedPart.id)
+      .then((payload) => {
+        if (!isCurrent) return;
+        setGeneratedInteractionsByComponentId((current) => ({
+          ...current,
+          [selectedPart.id]: payload.interactions ?? []
+        }));
+        setGeneratedInteractionState((current) => ({
+          ...current,
+          loadingComponentId: current.loadingComponentId === selectedPart.id ? null : current.loadingComponentId
+        }));
+      })
+      .catch((loadError) => {
+        if (!isCurrent) return;
+        setGeneratedInteractionState((current) => ({
+          ...current,
+          loadingComponentId: current.loadingComponentId === selectedPart.id ? null : current.loadingComponentId,
+          errorComponentId: selectedPart.id,
+          error: loadError.message
+        }));
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [generatedInteractionsByComponentId, selectedPart, selectedPartIsGenerated]);
 
   useEffect(() => {
     if (!selectionStore.selectedPartId && displayParts.length > 0) {
@@ -1046,12 +1202,7 @@ export default function App() {
   const handlePartChange = useCallback(
     (partId, patch) => {
       const part = displayParts.find((item) => item.id === partId);
-      const label =
-        patch.visible !== undefined
-          ? `${patch.visible ? 'Show' : 'Hide'} ${part?.name ?? partId}`
-          : patch.name !== undefined
-            ? `Rename ${part?.name ?? partId}`
-            : `Change color: ${part?.name ?? partId}`;
+      const label = createPartPatchLabel(part, partId, patch);
 
       setPartOverrides((current) => ({
         ...current,
@@ -1083,6 +1234,66 @@ export default function App() {
       setOperationSubmitState({ status: 'idle', message: '' });
     },
     [displayParts]
+  );
+
+  const handleGeneratedInteractionsChange = useCallback(
+    (interactions) => {
+      if (!selectedPart?.id) return;
+      setGeneratedInteractionsByComponentId((current) => ({
+        ...current,
+        [selectedPart.id]: interactions
+      }));
+      setGeneratedInteractionState((current) => ({
+        ...current,
+        errorComponentId: null,
+        error: ''
+      }));
+    },
+    [selectedPart?.id]
+  );
+
+  const handleGeneratedInteractionsSave = useCallback(async () => {
+    if (!selectedPart?.id) return;
+    const interactions = generatedInteractionsByComponentId[selectedPart.id] ?? [];
+    try {
+      setGeneratedInteractionState((current) => ({
+        ...current,
+        savingComponentId: selectedPart.id,
+        errorComponentId: null,
+        error: ''
+      }));
+      const payload = await saveComponentInteractions(PROJECT_ID, selectedPart.id, { interactions });
+      setGeneratedInteractionsByComponentId((current) => ({
+        ...current,
+        [selectedPart.id]: payload.interactions ?? []
+      }));
+      setGeneratedInteractionState((current) => ({
+        ...current,
+        savingComponentId: current.savingComponentId === selectedPart.id ? null : current.savingComponentId
+      }));
+    } catch (saveError) {
+      setGeneratedInteractionState((current) => ({
+        ...current,
+        savingComponentId: current.savingComponentId === selectedPart.id ? null : current.savingComponentId,
+        errorComponentId: selectedPart.id,
+        error: saveError.message
+      }));
+    }
+  }, [generatedInteractionsByComponentId, selectedPart?.id]);
+
+  const handleGeneratedAssetDelete = useCallback(
+    (partId) => {
+      const part = displayParts.find((item) => item.id === partId);
+      if (!isGeneratedPart(part)) return;
+
+      if (localModel?.source === 'generation') {
+        handleClearImportedModel();
+        return;
+      }
+
+      handlePartChange(partId, { visible: false });
+    },
+    [displayParts, handleClearImportedModel, handlePartChange, localModel?.source]
   );
 
   const handleRemoveSceneObject = useCallback(
@@ -1466,6 +1677,16 @@ export default function App() {
           <InspectorPanel
             activeRightPanel={activeRightPanel}
             selectedPart={selectedPart}
+            generatedInteractions={selectedGeneratedInteractions}
+            generatedInteractionsSaving={
+              generatedInteractionState.loadingComponentId === selectedPart?.id ||
+              generatedInteractionState.savingComponentId === selectedPart?.id
+            }
+            generatedInteractionsError={
+              selectedPartIsGenerated && generatedInteractionState.errorComponentId === selectedPart?.id
+                ? generatedInteractionState.error
+                : ''
+            }
             editHistory={editHistory}
             operationQueue={operationQueue}
             operationPayload={operationPayload}
@@ -1480,6 +1701,10 @@ export default function App() {
             onPanelModeChange={handlePanelModeChange}
             onPartChange={handlePartChange}
             onPartRemove={handleRemoveSceneObject}
+            onGeneratedInteractionsChange={handleGeneratedInteractionsChange}
+            onGeneratedInteractionsSave={handleGeneratedInteractionsSave}
+            onGeneratedAssetDelete={handleGeneratedAssetDelete}
+            onGeneratedAssetHide={(partId) => handlePartChange(partId, { visible: false })}
             onClearSubmitted={handleClearSubmitted}
             onOperationSubmit={handleOperationSubmit}
             onPromptSubmit={handlePromptSubmit}
